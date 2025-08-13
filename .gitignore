@@ -1,0 +1,55 @@
+# -----------------
+# .NET / C# ignores
+# -----------------
+
+# Build results
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio files
+.vs/
+
+# Rider IDE files (if used)
+.idea/
+
+# Logs
+*.log
+
+# ---------------------
+# Node / React / Vite
+# ---------------------
+
+# Node modules
+frontend/node_modules/
+
+# Vite build output
+frontend/dist/
+
+# Environment variables
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# npm logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# ---------------------
+# Other
+# ---------------------
+
+# Ignore packages folder if using NuGet package restore
+packages/
+
+# Ignore publish output
+publish/
+
+# macOS system files
+.DS_Store

@@ -61,8 +61,9 @@ A **Budget Planner** web app built with React on the frontend and an ASP.NET Cor
     ```npm run dev```
 
 5. Start the backend:
-    ```cd backend
-    dotnet run```
+    ```bash
+    cd backend
+    dotnet run
 
 ## Collaborators
 - Oliver Triana

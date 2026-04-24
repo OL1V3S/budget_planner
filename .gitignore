@@ -35,6 +35,7 @@ frontend/dist/
 frontend/.env
 frontend/.env.local
 frontend/.env.*.local
+frontend/.env.*
 
 # npm logs
 frontend/npm-debug.log*

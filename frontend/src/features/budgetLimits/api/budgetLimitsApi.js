@@ -1,7 +1,7 @@
-import { api } from "../../../shared/api/client";
+import client from "../../../shared/api/client";
 
 export const budgetLimitsApi = {
-  getByMonth: (monthYear) => api.get(`/api/budgetlimits?monthYear=${monthYear}`),
-  upsert: (payload) => api.post("/api/budgetlimits", payload),
-  remove: (id) => api.delete(`/api/budgetlimits/${id}`),
+  getByMonth: (monthYear) => client.get(`/api/budgetlimits?monthYear=${monthYear}`),
+  upsert: (payload) => client.post("/api/budgetlimits", payload),
+  remove: (id) => client.delete(`/api/budgetlimits/${id}`),
 };

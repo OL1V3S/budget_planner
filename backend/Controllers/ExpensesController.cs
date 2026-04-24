@@ -2,11 +2,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using BudgetPlanner.Data;
 using BudgetPlanner.Models;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace BudgetPlanner.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class ExpensesController : ControllerBase
 {
     private readonly BudgetContext _context;
@@ -16,45 +19,73 @@ public class ExpensesController : ControllerBase
         _context = context;
     }
 
+    private string? GetUserId()
+    {
+        return User.FindFirstValue(ClaimTypes.NameIdentifier);
+    }
+
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Expense>>> GetExpenses()
     {
-        return await _context.Expenses.ToListAsync();
+        var userId = GetUserId();
+
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        return await _context.Expenses
+            .Where(e => e.UserId == userId)
+            .ToListAsync();
     }
 
     [HttpPost]
     public async Task<ActionResult<Expense>> PostExpense(Expense expense)
     {
+        var userId = GetUserId();
+
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        expense.UserId = userId;
+
         _context.Expenses.Add(expense);
         await _context.SaveChangesAsync();
+
         return CreatedAtAction(nameof(GetExpenses), new { id = expense.Id }, expense);
     }
 
     [HttpPut("{id}")]
     public async Task<IActionResult> PutExpense(int id, Expense updatedExpense)
     {
+        var userId = GetUserId();
+
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
         if (id != updatedExpense.Id)
         {
             return BadRequest("Expense ID mismatch");
         }
 
-        _context.Entry(updatedExpense).State = EntityState.Modified;
+        var existingExpense = await _context.Expenses
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
 
-        try
+        if (existingExpense == null)
         {
-            await _context.SaveChangesAsync();
+            return NotFound();
         }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!_context.Expenses.Any(e => e.Id == id))
-            {
-                return NotFound();
-            }
-            else
-            {
-                throw;
-            }
-        }
+
+        existingExpense.Description = updatedExpense.Description;
+        existingExpense.Amount = updatedExpense.Amount;
+        existingExpense.Date = updatedExpense.Date;
+        existingExpense.Category = updatedExpense.Category;
+
+        await _context.SaveChangesAsync();
 
         return NoContent();
     }
@@ -62,7 +93,15 @@ public class ExpensesController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteExpense(int id)
     {
-        var expense = await _context.Expenses.FindAsync(id);
+        var userId = GetUserId();
+
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        var expense = await _context.Expenses
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
 
         if (expense == null)
         {

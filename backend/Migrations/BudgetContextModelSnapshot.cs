@@ -30,15 +30,9 @@ namespace backend.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("AmountSpent")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("LastReset")
-                        .HasColumnType("datetime2");
 
                     b.Property<decimal>("LimitAmount")
                         .HasPrecision(18, 2)
@@ -46,18 +40,6 @@ namespace backend.Migrations
 
                     b.Property<DateTime>("MonthYear")
                         .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("NextReset")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("RecurrenceDays")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ResetFrequency")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("UsedPercentage")
-                        .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
 
@@ -86,12 +68,6 @@ namespace backend.Migrations
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Recurrence")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("Recurring")
-                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 

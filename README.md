@@ -8,21 +8,19 @@ A **Budget Planner** web app built with React on the frontend and an ASP.NET Cor
 
 - **Expense Management**  
   - Add, edit, and delete expenses  
-  - Track description, amount, date, category  
-  - Support for recurring expenses (weekly, biweekly, monthly)  
+  - Track description, amount, date, category   
 
 - **Filtering & Search**  
-  - Filter by date ranges (last 7 days, last 30 days, this month, custom)  
-  - Filter by category or recurring vs one-time  
+  - Filter by date ranges 
+  - Filter by category
   - Search by description or category text  
 
 - **Budget Tracking**  
   - Set and manage category-based budget limits  
-  - Define monthly limits with recurrence intervals  
+  - Define monthly limits
   - Track amount spent, usage percentage, and alerts for overspending  
 
 - **Visualization**  
-  - Interactive line chart of monthly spending (last 12 months)  
   - Category summaries showing spending vs limits  
 
 ---

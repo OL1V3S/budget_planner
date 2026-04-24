@@ -20,8 +20,6 @@ builder.Services.AddControllers();
 builder.Services.AddDbContext<BudgetContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddHostedService<BudgetResetService>();
-builder.Services.AddHostedService<RecurringExpenseService>();
 
 
 

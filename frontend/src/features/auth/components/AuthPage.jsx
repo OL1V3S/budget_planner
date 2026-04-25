@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { authApi } from "../../../shared/api/authApi";
 import { Eye, EyeOff } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export default function AuthPage({ onLogin }) {
   const [mode, setMode] = useState("login");
@@ -9,6 +10,7 @@ export default function AuthPage({ onLogin }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const navigate = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -21,7 +23,7 @@ export default function AuthPage({ onLogin }) {
     try {
       if (mode === "register") {
         await authApi.register({ email, password });
-        alert("Account created. You can log in now.");
+        alert("Account created. Please confirm your email before logging in.");
         setMode("login");
         setPassword("");
         setConfirmPassword("");
@@ -89,11 +91,22 @@ export default function AuthPage({ onLogin }) {
         </button>
         </div>
 
+        {mode === "login" && (
+            <button
+            type="button"
+            className="button-ghost"
+            onClick={() => navigate("/forgot-password")}
+            >
+            Forgot password?
+            </button>
+        )}
+
+
           {mode === "register" && (
             <>
               <div className="password-field">
                 <input
-                    type={showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    type={showConfirmPassword ? "text" : "password"}
                     placeholder="Confirm Password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}

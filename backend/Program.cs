@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using BudgetPlanner.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -51,13 +52,26 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 builder.Services.AddDbContext<BudgetContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services
+    .AddIdentity<ApplicationUser, IdentityRole>(options =>
+    {
+        options.SignIn.RequireConfirmedEmail = true;
+        options.User.RequireUniqueEmail = true;
 
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(10);
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.AllowedForNewUsers = true;
+    })
     .AddEntityFrameworkStores<BudgetContext>()
     .AddDefaultTokenProviders();
 
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "temporary-dev-key-change-this-later";
+var jwtKey = builder.Configuration["Jwt:Key"];
+
+if (string.IsNullOrWhiteSpace(jwtKey))
+{
+    throw new InvalidOperationException("JWT key is missing");
+}
 
 builder.Services.AddAuthentication(options =>
 {
@@ -78,6 +92,7 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 var app = builder.Build();
 
@@ -88,6 +103,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
+
+app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();

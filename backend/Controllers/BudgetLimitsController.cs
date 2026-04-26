@@ -44,6 +44,9 @@ public class BudgetLimitsController : ControllerBase
             return BadRequest("Invalid monthYear format. Expected format: YYYY-MM");
         }
 
+        // 🔥 FIX: force UTC
+        monthYearDate = DateTime.SpecifyKind(monthYearDate, DateTimeKind.Utc);
+
         var limits = await _context.BudgetLimits
             .Where(b =>
                 b.UserId == userId &&
@@ -75,7 +78,12 @@ public class BudgetLimitsController : ControllerBase
         }
 
         limit.UserId = userId;
-        limit.MonthYear = new DateTime(limit.MonthYear.Year, limit.MonthYear.Month, 1);
+
+        // 🔥 FIX: normalize + force UTC
+        limit.MonthYear = DateTime.SpecifyKind(
+            new DateTime(limit.MonthYear.Year, limit.MonthYear.Month, 1),
+            DateTimeKind.Utc
+        );
 
         var existing = await _context.BudgetLimits
             .FirstOrDefaultAsync(b =>

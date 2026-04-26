@@ -17,11 +17,11 @@ public class BudgetContext : IdentityDbContext<ApplicationUser>
 
         modelBuilder.Entity<Expense>()
             .Property(e => e.Amount)
-            .HasPrecision(18, 2);
+            .HasColumnType("numeric(18,2)");
 
         modelBuilder.Entity<BudgetLimit>()
             .Property(b => b.LimitAmount)
-            .HasPrecision(18, 2);
+            .HasColumnType("numeric(18,2)");
 
         modelBuilder.Entity<Expense>()
             .HasOne(e => e.User)

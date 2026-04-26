@@ -25,6 +25,9 @@ export default function BudgetLimitsPanel({
   const [editingBudgetCategory, setEditingBudgetCategory] = useState(null);
   const [editingBudgetData, setEditingBudgetData] = useState({});
 
+  const roundMoney = (val) => Math.round(parseFloat(val || 0) * 100) / 100;
+  const isValidMoney = (val) => /^\d*\.?\d{0,2}$/.test(val);
+
   async function handleSetBudgetLimit() {
     if (!limitCategory || !limitAmount || !limitMonthYear) {
       alert("Fill all budget limit fields");
@@ -38,7 +41,7 @@ export default function BudgetLimitsPanel({
 
     const payload = {
       category: finalCategory,
-      limitAmount: Math.round(parseFloat(limitAmount) * 100) / 100,
+      limitAmount: roundMoney(limitAmount),
       monthYear: new Date(limitMonthYear + "-01T00:00:00").toISOString(),
     };
 
@@ -51,8 +54,11 @@ export default function BudgetLimitsPanel({
 
   function startEditBudget(category) {
     const limit = budgetLimitsByCategory[category];
+
     setEditingBudgetCategory(category);
-    setEditingBudgetData({ limitAmount: limit?.limitAmount ?? "" });
+    setEditingBudgetData({
+      limitAmount: Number(limit?.limitAmount ?? 0).toFixed(2),
+    });
   }
 
   function cancelEditBudget() {
@@ -63,7 +69,7 @@ export default function BudgetLimitsPanel({
   async function saveBudgetEdit(category) {
     const payload = {
       category,
-      limitAmount: Math.round(parseFloat(editingBudgetData.limitAmount) * 100) / 100,
+      limitAmount: roundMoney(editingBudgetData.limitAmount),
       monthYear: new Date(limitMonthYear + "-01T00:00:00").toISOString(),
     };
 
@@ -96,6 +102,7 @@ export default function BudgetLimitsPanel({
                 <th>Actions</th>
               </tr>
             </thead>
+
             <tbody>
               {Object.entries(budgetLimitsByCategory).map(([cat, limit]) => {
                 const used = Math.round((totalsByCategory[cat] || 0) * 100) / 100;
@@ -110,20 +117,28 @@ export default function BudgetLimitsPanel({
                 return (
                   <tr
                     key={cat}
-                    style={{ backgroundColor: used >= limitAmt * 0.9 ? "rgba(255,0,0,.55)" : undefined }}
+                    style={{
+                      backgroundColor:
+                        used >= limitAmt * 0.9 ? "rgba(255,0,0,.55)" : undefined,
+                    }}
                   >
                     <td>{displayText(cat)}</td>
 
                     <td>
                       {editingBudgetCategory === cat ? (
                         <input
-                          type="number"
+                          type="text"
                           value={editingBudgetData.limitAmount}
-                          onChange={(e) =>
-                            setEditingBudgetData((p) => ({ ...p, limitAmount: e.target.value }))
-                          }
-                          step="0.01"
-                          min="0"
+                          onChange={(e) => {
+                            const value = e.target.value;
+
+                            if (isValidMoney(value)) {
+                              setEditingBudgetData((p) => ({
+                                ...p,
+                                limitAmount: value,
+                              }));
+                            }
+                          }}
                         />
                       ) : (
                         limitAmt.toFixed(2)
@@ -133,7 +148,12 @@ export default function BudgetLimitsPanel({
                     <td>
                       {used.toFixed(2)}
                       {limitAmt ? (
-                        <span style={{ marginLeft: 6, color: pct >= 90 ? "red" : "white" }}>
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            color: pct >= 90 ? "red" : "white",
+                          }}
+                        >
                           ({Math.round(pct)}%)
                         </span>
                       ) : null}
@@ -193,12 +213,16 @@ export default function BudgetLimitsPanel({
           )}
 
           <input
-            type="number"
+            type="text"
             placeholder="Limit Amount"
             value={limitAmount}
-            onChange={(e) => setLimitAmount(e.target.value)}
-            min="0"
-            step="0.01"
+            onChange={(e) => {
+              const value = e.target.value;
+
+              if (isValidMoney(value)) {
+                setLimitAmount(value);
+              }
+            }}
           />
 
           <input

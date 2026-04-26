@@ -25,7 +25,7 @@ export default function BudgetLimitsPanel({
   const [editingBudgetCategory, setEditingBudgetCategory] = useState(null);
   const [editingBudgetData, setEditingBudgetData] = useState({});
 
-  const roundMoney = (val) => Math.round(parseFloat(val || 0) * 100) / 100;
+  const roundMoney = (val) => Number(parseFloat(val || 0).toFixed(2));
   const isValidMoney = (val) => /^\d*\.?\d{0,2}$/.test(val);
 
   async function handleSetBudgetLimit() {
@@ -105,8 +105,8 @@ export default function BudgetLimitsPanel({
 
             <tbody>
               {Object.entries(budgetLimitsByCategory).map(([cat, limit]) => {
-                const used = Math.round((totalsByCategory[cat] || 0) * 100) / 100;
-                const limitAmt = Number(limit.limitAmount || 0);
+                const used = Number((totalsByCategory[cat] || 0).toFixed(2));
+                const limitAmt = Number((limit.limitAmount || 0).toFixed(2));
                 const pct = limitAmt ? usedPercentage(used, limitAmt) : 0;
 
                 const nextResetDate = (() => {

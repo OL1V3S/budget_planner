@@ -51,6 +51,9 @@ public class ExpensesController : ControllerBase
 
         expense.UserId = userId;
 
+        // 🔥 FIX: ensure UTC for PostgreSQL
+        expense.Date = DateTime.SpecifyKind(expense.Date, DateTimeKind.Utc);
+
         _context.Expenses.Add(expense);
         await _context.SaveChangesAsync();
 
@@ -82,7 +85,10 @@ public class ExpensesController : ControllerBase
 
         existingExpense.Description = updatedExpense.Description;
         existingExpense.Amount = updatedExpense.Amount;
-        existingExpense.Date = updatedExpense.Date;
+
+        // 🔥 FIX: ensure UTC here too
+        existingExpense.Date = DateTime.SpecifyKind(updatedExpense.Date, DateTimeKind.Utc);
+
         existingExpense.Category = updatedExpense.Category;
 
         await _context.SaveChangesAsync();

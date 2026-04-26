@@ -38,7 +38,7 @@ export default function BudgetLimitsPanel({
 
     const payload = {
       category: finalCategory,
-      limitAmount: parseFloat(limitAmount),
+      limitAmount: Math.round(parseFloat(limitAmount) * 100) / 100,
       monthYear: new Date(limitMonthYear + "-01T00:00:00").toISOString(),
     };
 
@@ -63,7 +63,7 @@ export default function BudgetLimitsPanel({
   async function saveBudgetEdit(category) {
     const payload = {
       category,
-      limitAmount: parseFloat(editingBudgetData.limitAmount),
+      limitAmount: Math.round(parseFloat(editingBudgetData.limitAmount) * 100) / 100,
       monthYear: new Date(limitMonthYear + "-01T00:00:00").toISOString(),
     };
 
@@ -98,7 +98,7 @@ export default function BudgetLimitsPanel({
             </thead>
             <tbody>
               {Object.entries(budgetLimitsByCategory).map(([cat, limit]) => {
-                const used = totalsByCategory[cat] || 0;
+                const used = Math.round((totalsByCategory[cat] || 0) * 100) / 100;
                 const limitAmt = Number(limit.limitAmount || 0);
                 const pct = limitAmt ? usedPercentage(used, limitAmt) : 0;
 

@@ -1,67 +1,141 @@
 # Budget Planner
 
-A **Budget Planner** web app built with React on the frontend and an ASP.NET Core Web API backend to manage expenses and budget limits.
+A full-stack budget planner web application that allows users to track expenses, set monthly budget limits, and visualize spending by category.
+
+**Live Demo:** https://oli-budget-planner.vercel.app/
+*(Create an account to explore full functionality)*
 
 ---
 
 ## Features
 
-- **Expense Management**  
-  - Add, edit, and delete expenses  
-  - Track description, amount, date, category   
+### Authentication
 
-- **Filtering & Search**  
-  - Filter by date ranges 
-  - Filter by category
-  - Search by description or category text  
+* User registration & login (JWT-based)
+* Email confirmation
+* Password reset functionality
 
-- **Budget Tracking**  
-  - Set and manage category-based budget limits  
-  - Define monthly limits
-  - Track amount spent, usage percentage, and alerts for overspending  
+### Expense Management
 
-- **Visualization**  
-  - Category summaries showing spending vs limits  
+* Add, edit, and delete expenses
+* Track:
+  * Description
+  * Amount
+  * Date
+  * Category
+* User-specific data isolation
+
+### Budget Limits
+
+* Set monthly budget limits by category
+* Edit and delete limits
+* Real-time usage tracking
+* Visual alerts when nearing/exceeding limits
+
+### Filtering & Search
+
+* Filter by:
+  * Date ranges
+  * Categories
+* Search by description or category
+
+### Data Visualization
+
+* Bar chart comparing:
+  * Spending vs Budget Limits
+* Category-based summaries
 
 ---
 
-## Technologies
+## Tech Stack
 
-- **Frontend:** React + Vite  
-- **Visualization:** Recharts  
-- **HTTP Client:** Axios  
-- **Backend:** ASP.NET Core Web API (configurable with `VITE_API_BASE_URL`)  
+### Frontend
+
+* React (Vite)
+* Axios
+* Chart.js (via react-chartjs-2)
+
+### Backend
+
+* ASP.NET Core Web API
+* Entity Framework Core
+* ASP.NET Identity (authentication)
+
+### Database
+
+* PostgreSQL (Neon)
+
+### Deployment
+
+* Frontend: Vercel
+* Backend: Render
 
 ---
 
-## Getting Started
+## Getting Started (Local Development)
 
 ### Prerequisites
 
-- Node.js (v14+ recommended)  
-- .NET 6.0+ (for backend API)  
+* Node.js
+* .NET 6+
+* PostgreSQL (or SQL Server for local dev)
 
-### Installation
+---
 
-1. Clone the repository:
+### 1. Clone the repo
 
-   ```bash
-   git clone https://github.com/your-username/budget-planner.git
-   cd budget-planner
+```bash
+git clone https://github.com/OL1V3S/budget_planner.git
+cd budget_planner
+```
 
-2. Install dependencies:
-    ```npm install```
+---
 
-3. Create .env file or edit in root of frontend and set API base URL:
-    ```VITE_API_BASE_URL=http://localhost:5000```
+### 2. Frontend setup
 
-4. Run the frontend:
-    ```npm run dev```
+```bash
+cd frontend
+npm install
+```
 
-5. Start the backend:
-    ```bash
-    cd backend
-    dotnet run
+Create `.env.local`:
 
-## Collaborators
-- Oliver Triana
+```env
+VITE_API_BASE_URL=http://localhost:5298
+```
+
+Run:
+
+```bash
+npm run dev
+```
+
+---
+
+### 3. Backend setup
+
+```bash
+cd backend
+dotnet restore
+dotnet run
+```
+
+---
+
+## Implementation Details
+
+* **JWT Authentication** for secure API access
+* **Entity Framework Core + PostgreSQL** for data storage
+* **CORS configuration** for frontend/backend communication
+
+---
+
+## Author
+
+**Oliver Triana**
+
+---
+
+## License
+
+This project is for educational and portfolio purposes.

@@ -123,7 +123,7 @@ export default function ExpensesPage() {
     setEditingExpenseId(expense.id);
     setEditingExpenseData({
       description: expense.description || "",
-      amount: expense.amount ?? "",
+      amount: Number(expense.amount ?? 0).toFixed(2),
       date: expense.date ? String(expense.date).slice(0, 10) : "",
       category: categoryIsDefault ? normalizeText(currentCategory) : "other",
       customCategory: categoryIsDefault ? "" : currentCategory,
@@ -144,7 +144,7 @@ export default function ExpensesPage() {
     const body = {
       id,
       description: normalizeText(editingExpenseData.description),
-      amount: parseFloat(editingExpenseData.amount),
+      amount: Math.round(parseFloat(editingExpenseData.amount) * 100) / 100,
       date: editingExpenseData.date,
       category: finalCategory,
     };

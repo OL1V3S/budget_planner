@@ -4,6 +4,9 @@ export const authApi = {
   register: (payload) => client.post("/api/auth/register", payload),
   login: (payload) => client.post("/api/auth/login", payload),
 
+  resendConfirmation: (payload) =>
+    client.post("/api/auth/resend-confirmation", payload),
+
   confirmEmail: (payload) =>
     client.post("/api/auth/confirm-email", payload),
 

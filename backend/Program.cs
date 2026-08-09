@@ -7,6 +7,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using BudgetPlanner.Services;
+using BudgetPlanner.Authentication;
+using BudgetPlanner.Configuration;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +27,18 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddControllers();
+
+builder.Services
+    .AddOptions<EmailSettingsOptions>()
+    .Bind(builder.Configuration.GetSection(EmailSettingsOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<EmailSettingsOptions>, EmailSettingsOptionsValidator>();
+
+builder.Services
+    .AddOptions<FrontendOptions>()
+    .Bind(builder.Configuration.GetSection(FrontendOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<FrontendOptions>, FrontendOptionsValidator>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -96,11 +111,16 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IAccountConfirmationService, AccountConfirmationService>();
+builder.Services.AddOptions<ConfirmationResendLimiterOptions>();
+builder.Services.AddSingleton<IConfirmationResendLimiter, ConfirmationResendLimiter>();
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+// Integration tests use isolated infrastructure and must never execute production migrations.
+if (!app.Environment.IsEnvironment("Testing"))
 {
+    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<BudgetContext>();
     db.Database.Migrate();
 }
@@ -121,3 +141,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+public partial class Program;

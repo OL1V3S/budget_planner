@@ -10,6 +10,8 @@ export default function AuthPage({ onLogin }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
+  const [isResending, setIsResending] = useState(false);
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
@@ -25,6 +27,7 @@ export default function AuthPage({ onLogin }) {
         await authApi.register({ email, password });
         alert("Account created. Please confirm your email before logging in.");
         setMode("login");
+        setResendMessage("");
         setPassword("");
         setConfirmPassword("");
         return;
@@ -41,18 +44,49 @@ export default function AuthPage({ onLogin }) {
 
       const errorData = err.response?.data;
 
+      if (errorData?.code === "confirmation_email_delivery_failed") {
+        setMode("login");
+        setPassword("");
+        setConfirmPassword("");
+        setResendMessage(errorData.message);
+        return;
+      }
+
       if (Array.isArray(errorData)) {
         alert(errorData.map((e) => e.description).join("\n"));
       } else if (typeof errorData === "string") {
         alert(errorData);
+      } else if (typeof errorData?.message === "string") {
+        alert(errorData.message);
       } else {
         alert(err.message || "Something went wrong.");
       }
     }
   }
 
+  async function handleResendConfirmation() {
+    if (!email || isResending) return;
+
+    setIsResending(true);
+    setResendMessage("");
+
+    try {
+      const response = await authApi.resendConfirmation({ email });
+      setResendMessage(response.data.message);
+    } catch (err) {
+      if (err.response?.status === 429) {
+        setResendMessage("Too many requests. Please wait before trying again.");
+      } else {
+        setResendMessage("Unable to request another confirmation email right now.");
+      }
+    } finally {
+      setIsResending(false);
+    }
+  }
+
   function switchMode() {
     setMode(mode === "login" ? "register" : "login");
+    setResendMessage("");
     setPassword("");
     setConfirmPassword("");
   }
@@ -142,6 +176,20 @@ export default function AuthPage({ onLogin }) {
             ? "Need an account? Register"
             : "Already have an account? Log in"}
         </button>
+
+        {mode === "login" && (
+          <>
+            <button
+              type="button"
+              className="button-ghost"
+              onClick={handleResendConfirmation}
+              disabled={!email || isResending}
+            >
+              {isResending ? "Requesting..." : "Resend confirmation email"}
+            </button>
+            {resendMessage && <p className="auth-help">{resendMessage}</p>}
+          </>
+        )}
       </div>
     </div>
   );

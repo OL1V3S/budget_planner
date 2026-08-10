@@ -408,6 +408,15 @@ table td {
   margin: 0;
 }
 
+.auth-secondary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
 .password-field {
   position: relative;
   display: flex;

@@ -10,6 +10,7 @@ export default function AuthPage({ onLogin }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [confirmationMessage, setConfirmationMessage] = useState("");
   const [resendMessage, setResendMessage] = useState("");
   const [isResending, setIsResending] = useState(false);
   const navigate = useNavigate();
@@ -25,8 +26,8 @@ export default function AuthPage({ onLogin }) {
     try {
       if (mode === "register") {
         await authApi.register({ email, password });
-        alert("Account created. Please confirm your email before logging in.");
-        setMode("login");
+        setMode("check-email");
+        setConfirmationMessage(`A confirmation link was sent to ${email}.`);
         setResendMessage("");
         setPassword("");
         setConfirmPassword("");
@@ -45,10 +46,11 @@ export default function AuthPage({ onLogin }) {
       const errorData = err.response?.data;
 
       if (errorData?.code === "confirmation_email_delivery_failed") {
-        setMode("login");
+        setMode("check-email");
+        setConfirmationMessage(errorData.message);
         setPassword("");
         setConfirmPassword("");
-        setResendMessage(errorData.message);
+        setResendMessage("");
         return;
       }
 
@@ -86,20 +88,55 @@ export default function AuthPage({ onLogin }) {
 
   function switchMode() {
     setMode(mode === "login" ? "register" : "login");
+    setConfirmationMessage("");
     setResendMessage("");
     setPassword("");
     setConfirmPassword("");
+  }
+
+  function returnToLogin() {
+    setMode("login");
+    setConfirmationMessage("");
+    setResendMessage("");
   }
 
   return (
     <div className="auth-page">
       <div className="auth-card">
         <h1>Budget Planner</h1>
-        <h2 className="h2">
-          {mode === "login" ? "Log In" : "Create Account"}
-        </h2>
+        {mode === "check-email" ? (
+          <>
+            <h2 className="h2">Check your email</h2>
+            <p className="auth-help">{confirmationMessage}</p>
+            <p className="auth-help mt-2">
+              Confirm <strong>{email}</strong> before logging in.
+            </p>
 
-        <form onSubmit={handleSubmit} className="auth-form">
+            {resendMessage && <p className="auth-help mt-2">{resendMessage}</p>}
+
+            <button
+              type="button"
+              className="mt-2"
+              onClick={handleResendConfirmation}
+              disabled={!email || isResending}
+            >
+              {isResending ? "Requesting..." : "Resend confirmation email"}
+            </button>
+            <button
+              type="button"
+              className="button-ghost"
+              onClick={returnToLogin}
+            >
+              Back to login
+            </button>
+          </>
+        ) : (
+          <>
+            <h2 className="h2">
+              {mode === "login" ? "Log In" : "Create Account"}
+            </h2>
+
+            <form onSubmit={handleSubmit} className="auth-form">
           <input
             type="email"
             placeholder="Email"
@@ -169,25 +206,16 @@ export default function AuthPage({ onLogin }) {
           <button type="submit">
             {mode === "login" ? "Log In" : "Register"}
           </button>
-        </form>
+            </form>
 
-        <button className="button-ghost" onClick={switchMode}>
-          {mode === "login"
-            ? "Need an account? Register"
-            : "Already have an account? Log in"}
-        </button>
-
-        {mode === "login" && (
-          <>
             <button
-              type="button"
               className="button-ghost"
-              onClick={handleResendConfirmation}
-              disabled={!email || isResending}
+              onClick={switchMode}
             >
-              {isResending ? "Requesting..." : "Resend confirmation email"}
+              {mode === "login"
+                ? "Need an account? Register"
+                : "Already have an account? Log in"}
             </button>
-            {resendMessage && <p className="auth-help">{resendMessage}</p>}
           </>
         )}
       </div>

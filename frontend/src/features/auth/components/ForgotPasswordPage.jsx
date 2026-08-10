@@ -5,6 +5,8 @@ import { authApi } from "../../../shared/api/authApi";
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [resendMessage, setResendMessage] = useState("");
+  const [isResending, setIsResending] = useState(false);
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
@@ -15,6 +17,26 @@ export default function ForgotPasswordPage() {
       setMessage(res.data.message);
     } catch {
       setMessage("Something went wrong.");
+    }
+  }
+
+  async function handleResendConfirmation() {
+    if (!email || isResending) return;
+
+    setIsResending(true);
+    setResendMessage("");
+
+    try {
+      const response = await authApi.resendConfirmation({ email });
+      setResendMessage(response.data.message);
+    } catch (err) {
+      if (err.response?.status === 429) {
+        setResendMessage("Too many requests. Please wait before trying again.");
+      } else {
+        setResendMessage("Unable to request another confirmation email right now.");
+      }
+    } finally {
+      setIsResending(false);
     }
   }
 
@@ -41,6 +63,19 @@ export default function ForgotPasswordPage() {
         </form>
 
         {message && <p className="auth-help">{message}</p>}
+
+        <section className="auth-secondary">
+          <p className="auth-help">Didn't receive your account confirmation?</p>
+          <button
+            type="button"
+            className="button-ghost"
+            onClick={handleResendConfirmation}
+            disabled={!email || isResending}
+          >
+            {isResending ? "Requesting..." : "Resend confirmation email"}
+          </button>
+          {resendMessage && <p className="auth-help">{resendMessage}</p>}
+        </section>
 
         <button
           type="button"

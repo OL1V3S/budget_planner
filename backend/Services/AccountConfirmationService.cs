@@ -43,7 +43,7 @@ public sealed class AccountConfirmationService(
                 cancellationToken);
 
             logger.LogInformation(
-                "Confirmation email accepted by the SMTP server for user {UserId}; reason {Reason}",
+                "Confirmation email accepted by the email provider for user {UserId}; reason {Reason}",
                 user.Id,
                 reason);
         }

@@ -1,14 +1,14 @@
-using System.Net.Sockets;
-using MailKit;
-using MailKit.Net.Smtp;
-using MailKit.Security;
 using MimeKit;
 using BudgetPlanner.Configuration;
+using Google;
+using Google.Apis.Auth.OAuth2.Responses;
 using Microsoft.Extensions.Options;
 
 namespace BudgetPlanner.Services;
 
-public class EmailService(IOptions<EmailSettingsOptions> emailSettings) : IEmailService
+public class EmailService(
+    IOptions<EmailSettingsOptions> emailSettings,
+    IGmailApiClient gmailApiClient) : IEmailService
 {
     public async Task SendEmailAsync(
         string toEmail,
@@ -32,27 +32,23 @@ public class EmailService(IOptions<EmailSettingsOptions> emailSettings) : IEmail
             HtmlBody = htmlBody
         }.ToMessageBody();
 
-        using var client = new SmtpClient();
+        using var stream = new MemoryStream();
+        await message.WriteToAsync(stream, cancellationToken);
+        var rawMessage = Convert.ToBase64String(stream.ToArray())
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
 
         try
         {
-            await client.ConnectAsync(
-                settings.SmtpServer,
-                settings.SmtpPort,
-                SecureSocketOptions.StartTls,
-                cancellationToken
-            );
-
-            await client.AuthenticateAsync(
-                settings.Username,
-                settings.Password,
-                cancellationToken
-            );
-
-            await client.SendAsync(message, cancellationToken);
-            await client.DisconnectAsync(true, cancellationToken);
+            await gmailApiClient.SendRawMessageAsync(
+                "me",
+                rawMessage,
+                cancellationToken);
         }
-        catch (Exception exception) when (IsExpectedDeliveryFailure(exception))
+        catch (Exception exception) when (
+            IsExpectedDeliveryFailure(exception) &&
+            !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested))
         {
             throw new EmailDeliveryException(
                 "The email provider did not accept the message.",
@@ -61,14 +57,10 @@ public class EmailService(IOptions<EmailSettingsOptions> emailSettings) : IEmail
     }
 
     private static bool IsExpectedDeliveryFailure(Exception exception) =>
-        exception is SmtpCommandException
-            or SmtpProtocolException
-            or ServiceNotConnectedException
-            or ServiceNotAuthenticatedException
-            or SocketException
+        exception is GoogleApiException
+            or TokenResponseException
+            or HttpRequestException
             or IOException
-            or System.Security.Authentication.AuthenticationException
-            or MailKit.Security.AuthenticationException
             or TimeoutException
-            or SslHandshakeException;
+            or OperationCanceledException;
 }

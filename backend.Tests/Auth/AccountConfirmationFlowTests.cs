@@ -428,9 +428,14 @@ public sealed class AccountConfirmationFlowTests
             services.GetServices<IValidateOptions<EmailSettingsOptions>>(),
             validator => validator is EmailSettingsOptionsValidator);
         Assert.Contains(
+            services.GetServices<IValidateOptions<GoogleEmailOptions>>(),
+            validator => validator is GoogleEmailOptionsValidator);
+        Assert.Contains(
             services.GetServices<IValidateOptions<FrontendOptions>>(),
             validator => validator is FrontendOptionsValidator);
         Assert.Equal("sender@example.com", services.GetRequiredService<IOptions<EmailSettingsOptions>>().Value.FromEmail);
+        Assert.Equal("test-client-id", services.GetRequiredService<IOptions<GoogleEmailOptions>>().Value.ClientId);
+        Assert.IsType<GmailApiClient>(services.GetRequiredService<IGmailApiClient>());
         var limiterOptions = services.GetRequiredService<IOptions<ConfirmationResendLimiterOptions>>().Value;
         Assert.Equal(60, limiterOptions.GlobalPermitLimit);
         Assert.Equal(3, limiterOptions.RecipientPermitLimit);
@@ -443,7 +448,7 @@ public sealed class AccountConfirmationFlowTests
 public sealed class AccountConfirmationConfigurationTests
 {
     [Fact]
-    public void Email_configuration_rejects_missing_and_malformed_values()
+    public void Sender_configuration_rejects_missing_and_malformed_values()
     {
         var validator = new EmailSettingsOptionsValidator();
 
@@ -451,25 +456,46 @@ public sealed class AccountConfirmationConfigurationTests
         var malformed = validator.Validate(null, new EmailSettingsOptions
         {
             FromName = "Budget Planner",
-            FromEmail = "not-an-email",
-            SmtpServer = "smtp.example.com",
-            SmtpPort = 70000,
-            Username = "user",
-            Password = "password"
+            FromEmail = "not-an-email"
         });
         var valid = validator.Validate(null, new EmailSettingsOptions
         {
             FromName = "Budget Planner",
-            FromEmail = "sender@example.com",
-            SmtpServer = "smtp.example.com",
-            SmtpPort = 587,
-            Username = "user",
-            Password = "password"
+            FromEmail = "sender@example.com"
         });
 
         Assert.True(empty.Failed);
         Assert.True(malformed.Failed);
         Assert.True(valid.Succeeded);
+    }
+
+    [Fact]
+    public void Google_email_configuration_requires_each_oauth_credential()
+    {
+        var validator = new GoogleEmailOptionsValidator();
+        var valid = new GoogleEmailOptions
+        {
+            ClientId = "client-id",
+            ClientSecret = "client-secret",
+            RefreshToken = "refresh-token"
+        };
+
+        Assert.True(validator.Validate(null, new GoogleEmailOptions
+        {
+            ClientSecret = valid.ClientSecret,
+            RefreshToken = valid.RefreshToken
+        }).Failed);
+        Assert.True(validator.Validate(null, new GoogleEmailOptions
+        {
+            ClientId = valid.ClientId,
+            RefreshToken = valid.RefreshToken
+        }).Failed);
+        Assert.True(validator.Validate(null, new GoogleEmailOptions
+        {
+            ClientId = valid.ClientId,
+            ClientSecret = valid.ClientSecret
+        }).Failed);
+        Assert.True(validator.Validate(null, valid).Succeeded);
     }
 
     [Fact]

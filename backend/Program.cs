@@ -35,6 +35,12 @@ builder.Services
 builder.Services.AddSingleton<IValidateOptions<EmailSettingsOptions>, EmailSettingsOptionsValidator>();
 
 builder.Services
+    .AddOptions<GoogleEmailOptions>()
+    .Bind(builder.Configuration.GetSection(GoogleEmailOptions.SectionName))
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<GoogleEmailOptions>, GoogleEmailOptionsValidator>();
+
+builder.Services
     .AddOptions<FrontendOptions>()
     .Bind(builder.Configuration.GetSection(FrontendOptions.SectionName))
     .ValidateOnStart();
@@ -110,6 +116,7 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+builder.Services.AddSingleton<IGmailApiClient, GmailApiClient>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IAccountConfirmationService, AccountConfirmationService>();
 builder.Services.AddOptions<ConfirmationResendLimiterOptions>();

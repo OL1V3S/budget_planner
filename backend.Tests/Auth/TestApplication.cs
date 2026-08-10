@@ -110,10 +110,9 @@ internal sealed class TestApplication : WebApplicationFactory<Program>
                 ["Jwt:Key"] = "test-only-signing-key-that-is-at-least-thirty-two-bytes-long",
                 ["EmailSettings:FromName"] = "Budget Planner Tests",
                 ["EmailSettings:FromEmail"] = "sender@example.com",
-                ["EmailSettings:SmtpServer"] = "smtp.example.com",
-                ["EmailSettings:SmtpPort"] = "587",
-                ["EmailSettings:Username"] = "test-user",
-                ["EmailSettings:Password"] = "test-password",
+                ["GoogleEmail:ClientId"] = "test-client-id",
+                ["GoogleEmail:ClientSecret"] = "test-client-secret",
+                ["GoogleEmail:RefreshToken"] = "test-refresh-token",
                 ["Frontend:BaseUrl"] = "https://frontend.test"
             }));
 

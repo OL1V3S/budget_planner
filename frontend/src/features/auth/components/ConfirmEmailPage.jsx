@@ -49,9 +49,10 @@ export default function ConfirmEmailPage() {
 
         {status === "error" && (
           <>
-            <h2 className="h2">Link Already Used</h2>
+            <h2 className="h2">Unable to Confirm Email</h2>
             <p className="auth-help">
-              This email may already be confirmed. Try logging in.
+              This confirmation link is invalid, expired, or already used. Try
+              logging in or request a new confirmation email.
             </p>
           </>
         )}

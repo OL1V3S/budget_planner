@@ -1,118 +1,136 @@
 # Budget Planner
 
-A full-stack budget planner web application that allows users to track expenses, set monthly budget limits, and visualize spending by category.
+A full-stack personal finance application for tracking expenses, setting monthly category budgets, and visualizing spending.
 
 **Live Demo:** https://oli-budget-planner.vercel.app/
-*(Create an account to explore full functionality)*
 
----
+> Create an account to explore the authenticated features.
 
 ## Features
 
-### Authentication
+### Authentication & Account Recovery
 
-* User registration & login (JWT-based)
-* Email confirmation
-* Password reset functionality
+- User registration and JWT-based login with ASP.NET Identity
+- Email confirmation and password reset flows
+- Gmail API email delivery using OAuth credentials
+- Resend-confirmation recovery for unconfirmed accounts
+- Per-recipient and global rate limiting on confirmation resends
+- Neutral resend responses to avoid exposing account state
 
 ### Expense Management
 
-* Add, edit, and delete expenses
-* Track:
-  * Description
-  * Amount
-  * Date
-  * Category
-* User-specific data isolation
+- Add, edit, and delete expenses
+- Track description, amount, date, and category
+- User-specific data isolation
+- Search and filter expenses by date range and category
 
-### Budget Limits
+### Budget Management
 
-* Set monthly budget limits by category
-* Edit and delete limits
-* Real-time usage tracking
-* Visual alerts when nearing/exceeding limits
-
-### Filtering & Search
-
-* Filter by:
-  * Date ranges
-  * Categories
-* Search by description or category
+- Set monthly spending limits by category
+- Edit and delete budget limits
+- Track spending against configured limits
+- Visual indicators when spending approaches or exceeds a budget
 
 ### Data Visualization
 
-* Bar chart comparing:
-  * Spending vs Budget Limits
-* Category-based summaries
-
----
+- Spending summaries by category
+- Charts comparing spending with budget limits
+- Interactive frontend visualizations built with Chart.js/Recharts
 
 ## Tech Stack
 
 ### Frontend
 
-* React (Vite)
-* Axios
-* Chart.js (via react-chartjs-2)
+- React 19 + Vite
+- JavaScript
+- React Router
+- Axios
+- Chart.js / react-chartjs-2
+- Recharts
 
 ### Backend
 
-* ASP.NET Core Web API
-* Entity Framework Core
-* ASP.NET Identity (authentication)
+- ASP.NET Core 9 Web API
+- C#
+- Entity Framework Core
+- ASP.NET Identity
+- JWT Bearer authentication
+- Gmail API + MimeKit
 
 ### Database
 
-* PostgreSQL (Neon)
+- PostgreSQL in production with Neon
+- SQL Server provider available for local development
+
+### Testing
+
+- xUnit
+- `WebApplicationFactory<Program>` integration testing
+- EF Core InMemory for isolated test data
+- Authentication, email-delivery, configuration, validation, rate-limit, and concurrency coverage
 
 ### Deployment
 
-* Frontend: Vercel
-* Backend: Render
+- Frontend: Vercel
+- Backend: Render
+- Database: Neon PostgreSQL
+- Backend containerized with Docker
 
----
+## Project Structure
 
-## Getting Started (Local Development)
+```text
+budget_planner/
+├── frontend/        # React/Vite client
+├── backend/         # ASP.NET Core Web API
+└── backend.Tests/   # xUnit integration and service tests
+```
+
+## Local Development
 
 ### Prerequisites
 
-* Node.js
-* .NET 6+
-* PostgreSQL (or SQL Server for local dev)
+- Node.js
+- .NET 9 SDK
+- PostgreSQL or SQL Server
+- Gmail API OAuth credentials if testing email delivery
 
----
-
-### 1. Clone the repo
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/OL1V3S/budget_planner.git
 cd budget_planner
 ```
 
----
+### 2. Configure the backend
 
-### 2. Frontend setup
+The backend expects the following configuration values:
 
-```bash
-cd frontend
-npm install
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "YOUR_CONNECTION_STRING"
+  },
+  "Jwt": {
+    "Key": "YOUR_JWT_SIGNING_KEY"
+  },
+  "EmailSettings": {
+    "FromName": "Budget Planner",
+    "FromEmail": "YOUR_GMAIL_ADDRESS"
+  },
+  "GoogleEmail": {
+    "ClientId": "YOUR_GOOGLE_CLIENT_ID",
+    "ClientSecret": "YOUR_GOOGLE_CLIENT_SECRET",
+    "RefreshToken": "YOUR_GOOGLE_REFRESH_TOKEN"
+  },
+  "Frontend": {
+    "BaseUrl": "http://localhost:5173"
+  }
+}
 ```
 
-Create `.env.local`:
+Do not commit real credentials. Use local configuration or environment variables for secrets.
 
-```env
-VITE_API_BASE_URL=http://localhost:5298
-```
-
-Run:
-
-```bash
-npm run dev
-```
-
----
-
-### 3. Backend setup
+Start the backend:
 
 ```bash
 cd backend
@@ -120,21 +138,63 @@ dotnet restore
 dotnet run
 ```
 
----
+The default HTTP development URL is:
 
-## Implementation Details
+```text
+http://localhost:5298
+```
 
-* **JWT Authentication** for secure API access
-* **Entity Framework Core + PostgreSQL** for data storage
-* **CORS configuration** for frontend/backend communication
+### 3. Configure and run the frontend
 
----
+In a separate terminal:
+
+```bash
+cd frontend
+npm install
+```
+
+Create `frontend/.env.local`:
+
+```env
+VITE_API_BASE_URL=http://localhost:5298
+```
+
+Then run:
+
+```bash
+npm run dev
+```
+
+### 4. Run verification
+
+Backend tests:
+
+```bash
+dotnet test backend.Tests/backend.Tests.csproj
+```
+
+Frontend lint and production build:
+
+```bash
+cd frontend
+npm run lint
+npm run build
+```
+
+## Engineering Highlights
+
+- Full-stack React + ASP.NET Core architecture with a relational database
+- Authentication built on ASP.NET Identity and JWTs
+- Account-confirmation recovery designed around both reliability and account-enumeration resistance
+- Gmail API integration with validated configuration and explicit delivery-failure handling
+- Automated integration coverage for authentication and failure scenarios, including rate limiting and concurrent requests
+- Separate frontend, backend, and database deployments across Vercel, Render, and Neon
 
 ## Author
 
 **Oliver Triana**
 
----
+[LinkedIn](https://www.linkedin.com/in/oliver-triana/) · [GitHub](https://github.com/OL1V3S)
 
 ## License
 

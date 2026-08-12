@@ -31,19 +31,22 @@ internal sealed class TestApplication : WebApplicationFactory<Program>
     private readonly IConfirmationResendLimiter? _limiterOverride;
     private readonly ForgotPasswordLimiterTestSettings? _forgotPasswordLimiterSettings;
     private readonly IForgotPasswordLimiter? _forgotPasswordLimiterOverride;
+    private readonly TimeSpan? _tokenLifespan;
 
     private TestApplication(
         EmailFailureMode emailFailureMode,
         LimiterTestSettings? limiterSettings,
         IConfirmationResendLimiter? limiterOverride,
         ForgotPasswordLimiterTestSettings? forgotPasswordLimiterSettings,
-        IForgotPasswordLimiter? forgotPasswordLimiterOverride)
+        IForgotPasswordLimiter? forgotPasswordLimiterOverride,
+        TimeSpan? tokenLifespan)
     {
         EmailSender = new FakeEmailService(emailFailureMode);
         _limiterSettings = limiterSettings;
         _limiterOverride = limiterOverride;
         _forgotPasswordLimiterSettings = forgotPasswordLimiterSettings;
         _forgotPasswordLimiterOverride = forgotPasswordLimiterOverride;
+        _tokenLifespan = tokenLifespan;
     }
 
     public HttpClient Client { get; private set; } = null!;
@@ -54,14 +57,16 @@ internal sealed class TestApplication : WebApplicationFactory<Program>
         LimiterTestSettings? limiterSettings = null,
         IConfirmationResendLimiter? limiterOverride = null,
         ForgotPasswordLimiterTestSettings? forgotPasswordLimiterSettings = null,
-        IForgotPasswordLimiter? forgotPasswordLimiterOverride = null)
+        IForgotPasswordLimiter? forgotPasswordLimiterOverride = null,
+        TimeSpan? tokenLifespan = null)
     {
         var application = new TestApplication(
             emailFailureMode,
             limiterSettings,
             limiterOverride,
             forgotPasswordLimiterSettings,
-            forgotPasswordLimiterOverride);
+            forgotPasswordLimiterOverride,
+            tokenLifespan);
         lock (HostStartupLock)
         {
             var originalEnvironment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
@@ -95,6 +100,12 @@ internal sealed class TestApplication : WebApplicationFactory<Program>
 
             services.RemoveAll<IEmailService>();
             services.AddSingleton<IEmailService>(EmailSender);
+
+            if (_tokenLifespan != null)
+            {
+                services.Configure<DataProtectionTokenProviderOptions>(options =>
+                    options.TokenLifespan = _tokenLifespan.Value);
+            }
 
             if (_limiterSettings != null)
             {

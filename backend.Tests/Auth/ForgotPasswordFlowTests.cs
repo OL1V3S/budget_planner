@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using BudgetPlanner.Authentication;
@@ -13,6 +14,7 @@ namespace BudgetPlanner.Tests.Auth;
 public sealed class ForgotPasswordFlowTests
 {
     private const string ExistingEmail = "reset@example.com";
+    private const string MalformedToken = "A";
 
     [Fact]
     public async Task Existing_account_gets_neutral_response_and_working_reset_email()
@@ -42,6 +44,54 @@ public sealed class ForgotPasswordFlowTests
             });
 
         Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+    }
+
+    [Fact]
+    public async Task Malformed_reset_token_returns_identity_invalid_token()
+    {
+        Assert.Throws<FormatException>(() => WebEncoders.Base64UrlDecode(MalformedToken));
+        await using var app = await TestApplication.StartAsync();
+        await app.CreateUserAsync(ExistingEmail, confirmed: true);
+
+        var response = await PostResetPasswordAsync(app, ExistingEmail, MalformedToken);
+
+        await AssertInvalidTokenAsync(response);
+    }
+
+    [Fact]
+    public async Task Decodable_identity_invalid_reset_token_returns_identity_invalid_token()
+    {
+        await using var app = await TestApplication.StartAsync();
+        await app.CreateUserAsync(ExistingEmail, confirmed: true);
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes("not-an-identity-token"));
+
+        var response = await PostResetPasswordAsync(app, ExistingEmail, encodedToken);
+
+        await AssertInvalidTokenAsync(response);
+    }
+
+    [Fact]
+    public async Task Successfully_used_reset_token_cannot_be_reused()
+    {
+        await using var app = await TestApplication.StartAsync();
+        var token = await CreateResetTokenAsync(app, ExistingEmail);
+
+        var first = await PostResetPasswordAsync(app, ExistingEmail, token);
+        var replay = await PostResetPasswordAsync(app, ExistingEmail, token, "AnotherPassword1!");
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        await AssertInvalidTokenAsync(replay);
+    }
+
+    [Fact]
+    public async Task Expired_reset_token_returns_identity_invalid_token()
+    {
+        await using var app = await TestApplication.StartAsync(tokenLifespan: TimeSpan.FromTicks(-1));
+        var token = await CreateResetTokenAsync(app, ExistingEmail, confirmed: false);
+
+        var response = await PostResetPasswordAsync(app, ExistingEmail, token);
+
+        await AssertInvalidTokenAsync(response);
     }
 
     [Fact]
@@ -277,6 +327,39 @@ public sealed class ForgotPasswordFlowTests
         TestApplication app,
         string email) =>
         app.Client.PostAsJsonAsync("/api/auth/forgot-password", new { email });
+
+    private static Task<HttpResponseMessage> PostResetPasswordAsync(
+        TestApplication app,
+        string email,
+        string token,
+        string newPassword = "NewPassword1!") =>
+        app.Client.PostAsJsonAsync(
+            "/api/auth/reset-password",
+            new { email, token, newPassword });
+
+    private static async Task<string> CreateResetTokenAsync(
+        TestApplication app,
+        string email,
+        bool confirmed = true)
+    {
+        await app.CreateUserAsync(email, confirmed);
+        var forgot = await PostForgotPasswordAsync(app, email);
+        await AssertNeutralSuccessAsync(forgot);
+
+        var sent = Assert.Single(app.EmailSender.Messages);
+        var href = Regex.Match(sent.HtmlBody, "href=\"([^\"]+)\"").Groups[1].Value;
+        var resetUri = new Uri(WebUtility.HtmlDecode(href));
+        return QueryHelpers.ParseQuery(resetUri.Query)["token"].ToString();
+    }
+
+    private static async Task AssertInvalidTokenAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var errors = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var error = Assert.Single(errors.EnumerateArray());
+        Assert.Equal("InvalidToken", error.GetProperty("code").GetString());
+        Assert.Equal("Invalid token.", error.GetProperty("description").GetString());
+    }
 
     private static async Task AssertNeutralSuccessAsync(HttpResponseMessage response)
     {

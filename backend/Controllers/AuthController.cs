@@ -21,19 +21,22 @@ public class AuthController : ControllerBase
     private readonly IEmailService _emailService;
     private readonly IAccountConfirmationService _accountConfirmationService;
     private readonly IConfirmationResendLimiter _confirmationResendLimiter;
+    private readonly IForgotPasswordLimiter _forgotPasswordLimiter;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
         IConfiguration configuration,
         IEmailService emailService,
         IAccountConfirmationService accountConfirmationService,
-        IConfirmationResendLimiter confirmationResendLimiter)
+        IConfirmationResendLimiter confirmationResendLimiter,
+        IForgotPasswordLimiter forgotPasswordLimiter)
     {
         _userManager = userManager;
         _configuration = configuration;
         _emailService = emailService;
         _accountConfirmationService = accountConfirmationService;
         _confirmationResendLimiter = confirmationResendLimiter;
+        _forgotPasswordLimiter = forgotPasswordLimiter;
     }
 
     [HttpPost("register")]
@@ -154,51 +157,62 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("forgot-password")]
-    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request)
+    public async Task<IActionResult> ForgotPassword(
+        ForgotPasswordRequest request,
+        CancellationToken cancellationToken)
     {
-        var user = await _userManager.FindByEmailAsync(request.Email);
+        if (!_forgotPasswordLimiter.TryAcquireGlobal())
+            return StatusCode(StatusCodes.Status429TooManyRequests);
 
-        if (user == null)
+        if (!_forgotPasswordLimiter.TryAcquireRecipient(request.Email!))
+            return StatusCode(StatusCodes.Status429TooManyRequests);
+
+        var user = await _userManager.FindByEmailAsync(request.Email!);
+
+        if (user != null)
         {
-            return Ok(new
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+
+            var frontendBaseUrl = _configuration["Frontend:BaseUrl"];
+
+            var resetLink =
+                $"{frontendBaseUrl}/reset-password?email={Uri.EscapeDataString(request.Email!)}&token={encodedToken}";
+
+            try
             {
-                message = "If the email exists, a reset link was sent."
-            });
+                await _emailService.SendEmailAsync(
+                    request.Email!,
+                    "Reset your Budget Planner password",
+                    $"""
+                    <div style="background:#0f172a; padding:40px 20px; font-family:Arial, sans-serif;">
+                      <div style="max-width:500px; margin:auto; background:#020617; border-radius:14px; padding:24px; border:1px solid #1f2933;">
+
+                        <h2 style="color:#e5e7eb; margin:0 0 10px;">Budget Planner</h2>
+
+                        <p style="color:rgba(255,255,255,0.7); margin:0 0 20px;">
+                          Reset your password using the button below.
+                        </p>
+
+                        <a href="{resetLink}"
+                           style="display:inline-block; padding:12px 20px; background:#ef4444; color:white; text-decoration:none; border-radius:12px; font-weight:600;">
+                          Reset Password
+                        </a>
+
+                        <p style="color:rgba(255,255,255,0.5); margin-top:25px; font-size:13px;">
+                          If you didn’t request this, you can ignore this email.
+                        </p>
+                      </div>
+                    </div>
+                    """,
+                    cancellationToken);
+            }
+            catch (EmailDeliveryException)
+            {
+                // Preserve the same public response for missing and
+                // delivery-failed accounts to reduce account enumeration.
+            }
         }
-
-        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
-
-        var frontendBaseUrl = _configuration["Frontend:BaseUrl"];
-
-        var resetLink =
-            $"{frontendBaseUrl}/reset-password?email={Uri.EscapeDataString(request.Email)}&token={encodedToken}";
-
-        await _emailService.SendEmailAsync(
-            request.Email,
-            "Reset your Budget Planner password",
-            $"""
-            <div style="background:#0f172a; padding:40px 20px; font-family:Arial, sans-serif;">
-              <div style="max-width:500px; margin:auto; background:#020617; border-radius:14px; padding:24px; border:1px solid #1f2933;">
-
-                <h2 style="color:#e5e7eb; margin:0 0 10px;">Budget Planner</h2>
-
-                <p style="color:rgba(255,255,255,0.7); margin:0 0 20px;">
-                  Reset your password using the button below.
-                </p>
-
-                <a href="{resetLink}"
-                   style="display:inline-block; padding:12px 20px; background:#ef4444; color:white; text-decoration:none; border-radius:12px; font-weight:600;">
-                  Reset Password
-                </a>
-
-                <p style="color:rgba(255,255,255,0.5); margin-top:25px; font-size:13px;">
-                  If you didn’t request this, you can ignore this email.
-                </p>
-              </div>
-            </div>
-            """
-        );
 
         return Ok(new
         {
@@ -263,5 +277,6 @@ public record LoginRequest(string Email, string Password);
 public record ResendConfirmationRequest(
     [Required, StringLength(254), EmailAddress] string? Email);
 public record ConfirmEmailRequest(string UserId, string Token);
-public record ForgotPasswordRequest(string Email);
+public record ForgotPasswordRequest(
+    [Required, StringLength(254), EmailAddress] string? Email);
 public record ResetPasswordRequest(string Email, string Token, string NewPassword);

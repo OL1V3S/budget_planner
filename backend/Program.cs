@@ -121,6 +121,8 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IAccountConfirmationService, AccountConfirmationService>();
 builder.Services.AddOptions<ConfirmationResendLimiterOptions>();
 builder.Services.AddSingleton<IConfirmationResendLimiter, ConfirmationResendLimiter>();
+builder.Services.AddOptions<ForgotPasswordLimiterOptions>();
+builder.Services.AddSingleton<IForgotPasswordLimiter, ForgotPasswordLimiter>();
 
 var app = builder.Build();
 

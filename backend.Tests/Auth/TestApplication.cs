@@ -23,19 +23,27 @@ internal sealed class TestApplication : WebApplicationFactory<Program>
 
     public const string GenericResendMessage =
         "If an unconfirmed account exists for that email, a confirmation link has been sent.";
+    public const string GenericForgotPasswordMessage =
+        "If the email exists, a reset link was sent.";
 
     private readonly string _databaseName = $"confirmation-tests-{Guid.NewGuid()}";
     private readonly LimiterTestSettings? _limiterSettings;
     private readonly IConfirmationResendLimiter? _limiterOverride;
+    private readonly ForgotPasswordLimiterTestSettings? _forgotPasswordLimiterSettings;
+    private readonly IForgotPasswordLimiter? _forgotPasswordLimiterOverride;
 
     private TestApplication(
         EmailFailureMode emailFailureMode,
         LimiterTestSettings? limiterSettings,
-        IConfirmationResendLimiter? limiterOverride)
+        IConfirmationResendLimiter? limiterOverride,
+        ForgotPasswordLimiterTestSettings? forgotPasswordLimiterSettings,
+        IForgotPasswordLimiter? forgotPasswordLimiterOverride)
     {
         EmailSender = new FakeEmailService(emailFailureMode);
         _limiterSettings = limiterSettings;
         _limiterOverride = limiterOverride;
+        _forgotPasswordLimiterSettings = forgotPasswordLimiterSettings;
+        _forgotPasswordLimiterOverride = forgotPasswordLimiterOverride;
     }
 
     public HttpClient Client { get; private set; } = null!;
@@ -44,12 +52,16 @@ internal sealed class TestApplication : WebApplicationFactory<Program>
     public static Task<TestApplication> StartAsync(
         EmailFailureMode emailFailureMode = EmailFailureMode.None,
         LimiterTestSettings? limiterSettings = null,
-        IConfirmationResendLimiter? limiterOverride = null)
+        IConfirmationResendLimiter? limiterOverride = null,
+        ForgotPasswordLimiterTestSettings? forgotPasswordLimiterSettings = null,
+        IForgotPasswordLimiter? forgotPasswordLimiterOverride = null)
     {
         var application = new TestApplication(
             emailFailureMode,
             limiterSettings,
-            limiterOverride);
+            limiterOverride,
+            forgotPasswordLimiterSettings,
+            forgotPasswordLimiterOverride);
         lock (HostStartupLock)
         {
             var originalEnvironment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
@@ -97,6 +109,21 @@ internal sealed class TestApplication : WebApplicationFactory<Program>
             {
                 services.RemoveAll<IConfirmationResendLimiter>();
                 services.AddSingleton(_limiterOverride);
+            }
+
+            if (_forgotPasswordLimiterSettings != null)
+            {
+                services.Configure<ForgotPasswordLimiterOptions>(options =>
+                {
+                    options.GlobalPermitLimit = _forgotPasswordLimiterSettings.GlobalPermitLimit;
+                    options.RecipientPermitLimit = _forgotPasswordLimiterSettings.RecipientPermitLimit;
+                });
+            }
+
+            if (_forgotPasswordLimiterOverride != null)
+            {
+                services.RemoveAll<IForgotPasswordLimiter>();
+                services.AddSingleton(_forgotPasswordLimiterOverride);
             }
         });
     }
@@ -173,9 +200,38 @@ internal sealed record LimiterTestSettings(
     int GlobalPermitLimit,
     int RecipientPermitLimit = ConfirmationResendLimiterOptions.DefaultRecipientPermitLimit);
 
+internal sealed record ForgotPasswordLimiterTestSettings(
+    int GlobalPermitLimit,
+    int RecipientPermitLimit = ForgotPasswordLimiterOptions.DefaultRecipientPermitLimit);
+
 internal sealed class RecordingConfirmationResendLimiter(
     bool acquireGlobal,
     bool acquireRecipient = true) : IConfirmationResendLimiter
+{
+    private int _globalAttempts;
+    private int _recipientAttempts;
+
+    public int GlobalAttempts => _globalAttempts;
+    public int RecipientAttempts => _recipientAttempts;
+    public ConcurrentQueue<string> RecipientEmails { get; } = new();
+
+    public bool TryAcquireGlobal()
+    {
+        Interlocked.Increment(ref _globalAttempts);
+        return acquireGlobal;
+    }
+
+    public bool TryAcquireRecipient(string requestedEmail)
+    {
+        Interlocked.Increment(ref _recipientAttempts);
+        RecipientEmails.Enqueue(requestedEmail);
+        return acquireRecipient;
+    }
+}
+
+internal sealed class RecordingForgotPasswordLimiter(
+    bool acquireGlobal,
+    bool acquireRecipient = true) : IForgotPasswordLimiter
 {
     private int _globalAttempts;
     private int _recipientAttempts;
@@ -202,9 +258,11 @@ internal sealed class FakeEmailService(EmailFailureMode failureMode) : IEmailSer
 {
     private int _attemptCount;
     private readonly ConcurrentQueue<SentEmail> _messages = new();
+    private int _receivedCancellableToken;
 
     public int AttemptCount => _attemptCount;
     public IReadOnlyCollection<SentEmail> Messages => _messages.ToArray();
+    public bool ReceivedCancellableToken => Volatile.Read(ref _receivedCancellableToken) == 1;
 
     public Task SendEmailAsync(
         string toEmail,
@@ -213,6 +271,8 @@ internal sealed class FakeEmailService(EmailFailureMode failureMode) : IEmailSer
         CancellationToken cancellationToken = default)
     {
         Interlocked.Increment(ref _attemptCount);
+        if (cancellationToken.CanBeCanceled)
+            Interlocked.Exchange(ref _receivedCancellableToken, 1);
 
         switch (failureMode)
         {

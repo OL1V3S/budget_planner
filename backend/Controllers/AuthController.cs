@@ -145,8 +145,8 @@ public class AuthController : ControllerBase
         if (user == null)
             return BadRequest("Invalid user");
 
-        var tokenBytes = WebEncoders.Base64UrlDecode(request.Token);
-        var decodedToken = Encoding.UTF8.GetString(tokenBytes);
+        if (!TryDecodeIdentityToken(request.Token, out var decodedToken))
+            return BadRequest(new[] { _userManager.ErrorDescriber.InvalidToken() });
 
         var result = await _userManager.ConfirmEmailAsync(user, decodedToken);
 
@@ -228,8 +228,8 @@ public class AuthController : ControllerBase
         if (user == null)
             return BadRequest("Invalid request");
 
-        var tokenBytes = WebEncoders.Base64UrlDecode(request.Token);
-        var decodedToken = Encoding.UTF8.GetString(tokenBytes);
+        if (!TryDecodeIdentityToken(request.Token, out var decodedToken))
+            return BadRequest(new[] { _userManager.ErrorDescriber.InvalidToken() });
 
         var result = await _userManager.ResetPasswordAsync(
             user,
@@ -241,6 +241,21 @@ public class AuthController : ControllerBase
             return BadRequest(result.Errors);
 
         return Ok(new { message = "Password reset successfully" });
+    }
+
+    private static bool TryDecodeIdentityToken(string encodedToken, out string decodedToken)
+    {
+        try
+        {
+            var tokenBytes = WebEncoders.Base64UrlDecode(encodedToken);
+            decodedToken = Encoding.UTF8.GetString(tokenBytes);
+            return true;
+        }
+        catch (FormatException)
+        {
+            decodedToken = string.Empty;
+            return false;
+        }
     }
 
     private string GenerateJwtToken(ApplicationUser user)

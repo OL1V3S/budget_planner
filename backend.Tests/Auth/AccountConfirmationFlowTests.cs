@@ -1,11 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using BudgetPlanner.Authentication;
 using BudgetPlanner.Configuration;
 using BudgetPlanner.Data;
 using BudgetPlanner.Services;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -18,6 +20,7 @@ namespace BudgetPlanner.Tests.Auth;
 public sealed class AccountConfirmationFlowTests
 {
     private const string Password = "Password1!";
+    private const string MalformedToken = "A";
 
     [Fact]
     public async Task Register_creates_user_and_sends_one_confirmation_email()
@@ -176,6 +179,64 @@ public sealed class AccountConfirmationFlowTests
     }
 
     [Fact]
+    public async Task Malformed_confirmation_token_returns_identity_invalid_token()
+    {
+        Assert.Throws<FormatException>(() => WebEncoders.Base64UrlDecode(MalformedToken));
+        await using var app = await TestApplication.StartAsync();
+        var user = await app.CreateUserAsync("malformed-confirmation@example.com", confirmed: false);
+
+        var response = await app.Client.PostAsJsonAsync(
+            "/api/auth/confirm-email",
+            new { userId = user.Id, token = MalformedToken });
+
+        await AssertInvalidTokenAsync(response);
+    }
+
+    [Fact]
+    public async Task Decodable_identity_invalid_confirmation_token_returns_identity_invalid_token()
+    {
+        await using var app = await TestApplication.StartAsync();
+        var user = await app.CreateUserAsync("invalid-confirmation@example.com", confirmed: false);
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes("not-an-identity-token"));
+
+        var response = await app.Client.PostAsJsonAsync(
+            "/api/auth/confirm-email",
+            new { userId = user.Id, token = encodedToken });
+
+        await AssertInvalidTokenAsync(response);
+    }
+
+    [Fact]
+    public async Task Confirmation_token_replay_preserves_current_identity_behavior()
+    {
+        await using var app = await TestApplication.StartAsync();
+        var (userId, token) = await RegisterAndReadConfirmationLinkAsync(app, "replay-confirmation@example.com");
+
+        var first = await app.Client.PostAsJsonAsync(
+            "/api/auth/confirm-email",
+            new { userId, token });
+        var replay = await app.Client.PostAsJsonAsync(
+            "/api/auth/confirm-email",
+            new { userId, token });
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+    }
+
+    [Fact]
+    public async Task Expired_confirmation_token_returns_identity_invalid_token()
+    {
+        await using var app = await TestApplication.StartAsync(tokenLifespan: TimeSpan.FromTicks(-1));
+        var (userId, token) = await RegisterAndReadConfirmationLinkAsync(app, "expired-confirmation@example.com");
+
+        var response = await app.Client.PostAsJsonAsync(
+            "/api/auth/confirm-email",
+            new { userId, token });
+
+        await AssertInvalidTokenAsync(response);
+    }
+
+    [Fact]
     public async Task Unconfirmed_user_cannot_log_in()
     {
         await using var app = await TestApplication.StartAsync();
@@ -199,6 +260,31 @@ public sealed class AccountConfirmationFlowTests
             new { email = "confirmed@example.com", password = Password });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    private static async Task<(string UserId, string Token)> RegisterAndReadConfirmationLinkAsync(
+        TestApplication app,
+        string email)
+    {
+        var registration = await app.Client.PostAsJsonAsync(
+            "/api/auth/register",
+            new { email, password = Password });
+        Assert.Equal(HttpStatusCode.OK, registration.StatusCode);
+
+        var sent = Assert.Single(app.EmailSender.Messages);
+        var href = Regex.Match(sent.HtmlBody, "href=\"([^\"]+)\"").Groups[1].Value;
+        var confirmationUri = new Uri(WebUtility.HtmlDecode(href));
+        var query = QueryHelpers.ParseQuery(confirmationUri.Query);
+        return (query["userId"].ToString(), query["token"].ToString());
+    }
+
+    private static async Task AssertInvalidTokenAsync(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var errors = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var error = Assert.Single(errors.EnumerateArray());
+        Assert.Equal("InvalidToken", error.GetProperty("code").GetString());
+        Assert.Equal("Invalid token.", error.GetProperty("description").GetString());
     }
 
     [Fact]

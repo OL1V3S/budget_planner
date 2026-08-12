@@ -2,6 +2,7 @@ using System.Text;
 using BudgetPlanner.Data;
 using BudgetPlanner.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -77,6 +78,10 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddDbContext<BudgetContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services
+    .AddDataProtection()
+    .SetApplicationName("BudgetPlanner")
+    .PersistKeysToDbContext<BudgetContext>();
 builder.Services
     .AddIdentity<ApplicationUser, IdentityRole>(options =>
     {

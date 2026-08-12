@@ -1,15 +1,17 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using BudgetPlanner.Models;
 
 namespace BudgetPlanner.Data;
 
-public class BudgetContext : IdentityDbContext<ApplicationUser>
+public class BudgetContext : IdentityDbContext<ApplicationUser>, IDataProtectionKeyContext
 {
     public BudgetContext(DbContextOptions<BudgetContext> options) : base(options) {}
 
     public DbSet<Expense> Expenses { get; set; }
     public DbSet<BudgetLimit> BudgetLimits { get; set; }
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

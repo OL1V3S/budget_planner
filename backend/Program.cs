@@ -126,14 +126,6 @@ builder.Services.AddSingleton<IForgotPasswordLimiter, ForgotPasswordLimiter>();
 
 var app = builder.Build();
 
-// Integration tests use isolated infrastructure and must never execute production migrations.
-if (!app.Environment.IsEnvironment("Testing"))
-{
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<BudgetContext>();
-    db.Database.Migrate();
-}
-
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

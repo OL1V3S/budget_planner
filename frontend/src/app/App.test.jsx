@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { ThemeProvider } from '../shared/theme/ThemeProvider'
 
 vi.mock('../features/expenses/components/ExpensesPage', () => ({
   default: () => <div>Expenses content</div>,
@@ -16,7 +17,7 @@ describe('current root authentication behavior', () => {
   beforeEach(() => localStorage.clear())
 
   it('shows authentication at the root when no token exists', () => {
-    render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
+    render(<MemoryRouter initialEntries={['/']}><ThemeProvider><App /></ThemeProvider></MemoryRouter>)
     expect(screen.getByText('Authentication content')).toBeInTheDocument()
   })
 
@@ -24,7 +25,7 @@ describe('current root authentication behavior', () => {
     const user = userEvent.setup()
     localStorage.setItem('token', 'jwt-value')
     localStorage.setItem('email', 'person@example.com')
-    render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
+    render(<MemoryRouter initialEntries={['/']}><ThemeProvider><App /></ThemeProvider></MemoryRouter>)
 
     expect(screen.getByText('Expenses content')).toBeInTheDocument()
     expect(screen.getByText('person@example.com')).toBeInTheDocument()

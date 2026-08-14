@@ -1,5 +1,7 @@
 import { DEFAULT_CATEGORIES } from "../../../shared/constants/categories";
 import { displayText } from "../../../utils/text";
+import Card from "../../../shared/ui/Card";
+import FormField from "../../../shared/ui/FormField";
 
 export default function ExpenseForm({
   loading,
@@ -16,31 +18,31 @@ export default function ExpenseForm({
   setCustomCategory,
 }) {
   return (
-    <>
+    <Card as="section" className="section">
       <h2 className="h2">Add Entry</h2>
-      <div className="form-row">
-        <input
+      <div className="form-grid">
+        <FormField label="Description">{(id) => <input id={id}
           placeholder="Description"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-        />
+        />}</FormField>
 
-        <input
+        <FormField label="Amount">{(id) => <input id={id}
           type="number"
           placeholder="Amount"
           value={newAmount}
           onChange={(e) => setNewAmount(e.target.value)}
           min="0"
           step="0.01"
-        />
+        />}</FormField>
 
-        <input
+        <FormField label="Date">{(id) => <input id={id}
           type="date"
           value={newDate}
           onChange={(e) => setNewDate(e.target.value)}
-        />
+        />}</FormField>
 
-        <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)}>
+        <FormField label="Category">{(id) => <select id={id} value={newCategory} onChange={(e) => setNewCategory(e.target.value)}>
           <option value="">Category</option>
 
           {DEFAULT_CATEGORIES.map((c) => (
@@ -50,21 +52,21 @@ export default function ExpenseForm({
           ))}
 
           <option value="other">Other</option>
-        </select>
+        </select>}</FormField>
 
         {newCategory === "other" && (
-          <input
+          <FormField label="Custom category">{(id) => <input id={id}
             type="text"
             placeholder="Custom Category"
             value={customCategory}
             onChange={(e) => setCustomCategory(e.target.value)}
-          />
+          />}</FormField>
         )}
 
         <button onClick={onAdd} disabled={loading}>
           Add
         </button>
       </div>
-    </>
+    </Card>
   );
 }

@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import favicon from "../assets/images/budget_planner_favicon.png";
 import "../index.css";        
 import App from "./App.jsx"; 
+import { ThemeProvider } from "../shared/theme/ThemeProvider.jsx";
 
 const link = document.createElement("link");
 link.rel = "icon";
@@ -14,7 +15,9 @@ document.head.appendChild(link);
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
     </BrowserRouter>
   </StrictMode>
 );

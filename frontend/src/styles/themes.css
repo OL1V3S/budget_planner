@@ -1,0 +1,86 @@
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #f4f7fb;
+  --color-bg-accent: #e8efff;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-surface-subtle: #f7f9fc;
+  --color-text: #14213d;
+  --color-text-muted: #5f6f89;
+  --color-border: #dbe3ef;
+  --color-divider: #e8edf5;
+  --color-primary: #2457d6;
+  --color-primary-hover: #1b43ac;
+  --color-on-primary: #ffffff;
+  --color-danger: #c9364b;
+  --color-danger-soft: #fff0f2;
+  --color-warning: #a76500;
+  --color-warning-soft: #fff7e6;
+  --color-success: #087f5b;
+  --color-success-soft: #eafaf4;
+  --color-info: #1769aa;
+  --color-info-soft: #edf7ff;
+  --color-focus: #4f7cf7;
+  --shadow-sm: 0 1px 2px rgb(21 37 68 / 7%);
+  --shadow-md: 0 12px 30px rgb(35 55 90 / 10%);
+  --shadow-lg: 0 24px 60px rgb(35 55 90 / 16%);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #0b1020;
+  --color-bg-accent: #111b35;
+  --color-surface: #121a2b;
+  --color-surface-raised: #172136;
+  --color-surface-subtle: #0f1728;
+  --color-text: #edf2ff;
+  --color-text-muted: #9eabc3;
+  --color-border: #2a3851;
+  --color-divider: #202d43;
+  --color-primary: #7ba2ff;
+  --color-primary-hover: #9bb9ff;
+  --color-on-primary: #0b1734;
+  --color-danger: #ff7187;
+  --color-danger-soft: #351923;
+  --color-warning: #ffc15c;
+  --color-warning-soft: #302510;
+  --color-success: #55d6a6;
+  --color-success-soft: #102a23;
+  --color-info: #78c7ff;
+  --color-info-soft: #10283a;
+  --color-focus: #91b0ff;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 22%);
+  --shadow-md: 0 14px 34px rgb(0 0 0 / 28%);
+  --shadow-lg: 0 28px 70px rgb(0 0 0 / 36%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --color-bg: #0b1020;
+    --color-bg-accent: #111b35;
+    --color-surface: #121a2b;
+    --color-surface-raised: #172136;
+    --color-surface-subtle: #0f1728;
+    --color-text: #edf2ff;
+    --color-text-muted: #9eabc3;
+    --color-border: #2a3851;
+    --color-divider: #202d43;
+    --color-primary: #7ba2ff;
+    --color-primary-hover: #9bb9ff;
+    --color-on-primary: #0b1734;
+    --color-danger: #ff7187;
+    --color-danger-soft: #351923;
+    --color-warning: #ffc15c;
+    --color-warning-soft: #302510;
+    --color-success: #55d6a6;
+    --color-success-soft: #102a23;
+    --color-info: #78c7ff;
+    --color-info-soft: #10283a;
+    --color-focus: #91b0ff;
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 22%);
+    --shadow-md: 0 14px 34px rgb(0 0 0 / 28%);
+    --shadow-lg: 0 28px 70px rgb(0 0 0 / 36%);
+  }
+}

@@ -13,6 +13,7 @@ import BudgetLimitsPanel from "../../budgetLimits/components/BudgetLimitsPanel";
 import ExpenseForm from "./ExpenseForm";
 import ExpenseFilters from "./ExpenseFilters";
 import ExpenseList from "./ExpenseList";
+import Card from "../../../shared/ui/Card";
 const ENTRIES_PER_PAGE = 10;
 
 export default function ExpensesPage() {
@@ -155,7 +156,13 @@ export default function ExpensesPage() {
 
   return (
     <div className="container">
-      <h1>Budget Planner</h1>
+      <header className="page-header">
+        <div>
+          <p className="page-header__eyebrow">Your finances</p>
+          <h1>Budget Planner</h1>
+          <p className="muted">Track spending and keep monthly limits in view.</p>
+        </div>
+      </header>
   
       <ExpenseForm
         loading={expensesLoading}
@@ -210,13 +217,13 @@ export default function ExpensesPage() {
         onDelete={deleteExpense}
       />
   
-      <div style={{ marginTop: "2rem" }}>
+      <Card as="section" className="section chart-frame">
         <h2 className="h2">Spending vs Budget Limits</h2>
         <SpendingChart
           totalsByCategory={totalsByCategory}
           budgetLimitsByCategory={budgetLimitsByCategory}
         />
-      </div>
+      </Card>
     </div>
   );
 }

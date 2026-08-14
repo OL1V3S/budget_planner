@@ -1,4 +1,6 @@
 import { DEFAULT_CATEGORIES } from "../../../shared/constants/categories";
+import Card from "../../../shared/ui/Card";
+import FormField from "../../../shared/ui/FormField";
 
 export default function ExpenseFilters({
   searchTerm,
@@ -13,56 +15,47 @@ export default function ExpenseFilters({
   setCategoryFilter,
 }) {
   return (
-    <>
+    <Card as="section" className="section card--subtle">
       <h2 className="h2">Expense Table</h2>
-
-      <div style={{ marginBottom: "1rem" }}>
-        <input
+      <div className="filters">
+        <FormField label="Search">
+        {(id) => <input id={id}
           placeholder="Search description or category..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: "100%", padding: "0.5rem" }}
-        />
-      </div>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
-        <div>
-          <label>Date:</label>{" "}
-          <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
+        />}
+        </FormField>
+        <FormField label="Date range">{(id) => <select id={id} value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}>
             <option value="all">All Time</option>
             <option value="last7">Last 7 Days</option>
             <option value="last30">Last 30 Days</option>
             <option value="thisMonth">This Month</option>
             <option value="custom">Custom Range</option>
-          </select>
-        </div>
+          </select>}</FormField>
 
         {dateFilter === "custom" && (
           <>
-            <input
+            <FormField label="Start date">{(id) => <input id={id}
               type="date"
               value={customStartDate}
               onChange={(e) => setCustomStartDate(e.target.value)}
-            />
-            <input
+            />}</FormField>
+            <FormField label="End date">{(id) => <input id={id}
               type="date"
               value={customEndDate}
               onChange={(e) => setCustomEndDate(e.target.value)}
-            />
+            />}</FormField>
           </>
         )}
 
-        <div>
-          <label>Category:</label>{" "}
-          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+        <FormField label="Category">{(id) => <select id={id} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
             <option value="">All</option>
             {DEFAULT_CATEGORIES.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
             <option value="Other">Other</option>
-          </select>
-        </div>
+          </select>}</FormField>
       </div>
-    </>
+    </Card>
   );
 }

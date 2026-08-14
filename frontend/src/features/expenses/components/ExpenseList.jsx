@@ -1,4 +1,5 @@
 import ExpenseItem from "./ExpenseItem";
+import Card from "../../../shared/ui/Card";
 
 export default function ExpenseList({
   expenses,
@@ -14,10 +15,10 @@ export default function ExpenseList({
   onCancel,
   onDelete,
 }) {
-  if (!expenses || expenses.length === 0) return <p>No expenses found.</p>;
+  if (!expenses || expenses.length === 0) return <p className="empty-state">No expenses found.</p>;
 
   return (
-    <>
+    <Card as="section" className="section">
       <div className="table-wrapper">
         <table className="data-table" border="1" cellPadding="6">
           <thead>
@@ -49,10 +50,10 @@ export default function ExpenseList({
       </div>
 
       {!showAll && filteredCount > entriesPerPage && (
-        <button style={{ marginTop: "1rem" }} onClick={onShowAll}>
+        <button className="mt-2" onClick={onShowAll}>
           Show More
         </button>
       )}
-    </>
+    </Card>
   );
 }

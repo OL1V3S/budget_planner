@@ -49,6 +49,7 @@ export default function ResetPasswordPage() {
             <button
               type="button"
               className="password-toggle"
+              aria-label={showPassword ? "Hide new password" : "Show new password"}
               onClick={() => setShowPassword((prev) => !prev)}
             >
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}

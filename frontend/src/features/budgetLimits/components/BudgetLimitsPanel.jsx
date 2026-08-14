@@ -2,6 +2,9 @@ import { useMemo, useState } from "react";
 import { usedPercentage } from "../../../utils/budgets";
 import { DEFAULT_CATEGORIES } from "../../../shared/constants/categories";
 import { displayText, normalizeText } from "../../../utils/text";
+import Card from "../../../shared/ui/Card";
+import FormField from "../../../shared/ui/FormField";
+import StatusMessage from "../../../shared/ui/StatusMessage";
 
 export default function BudgetLimitsPanel({
   limitMonthYear,
@@ -83,13 +86,13 @@ export default function BudgetLimitsPanel({
   }
 
   return (
-    <div style={{ marginBottom: "2rem", marginTop: "2rem" }}>
+    <Card as="section" className="section">
       <h2 className="h2">Budget Limits for {limitMonthYear}</h2>
 
       {limitsLoading ? (
-        <p>Loading budget limits...</p>
+        <StatusMessage>Loading budget limits...</StatusMessage>
       ) : Object.keys(budgetLimitsByCategory).length === 0 ? (
-        <p>No budget limits set for this month.</p>
+        <p className="empty-state">No budget limits set for this month.</p>
       ) : (
         <div className="table-wrapper">
           <table className="data-table" border="1" cellPadding="6">
@@ -115,13 +118,7 @@ export default function BudgetLimitsPanel({
                 })();
 
                 return (
-                  <tr
-                    key={cat}
-                    style={{
-                      backgroundColor:
-                        used >= limitAmt * 0.9 ? "rgba(255,0,0,.55)" : undefined,
-                    }}
-                  >
+                  <tr key={cat} className={used >= limitAmt * 0.9 ? "budget-row--warning" : undefined}>
                     <td>{displayText(cat)}</td>
 
                     <td>
@@ -148,12 +145,7 @@ export default function BudgetLimitsPanel({
                     <td>
                       {used.toFixed(2)}
                       {limitAmt ? (
-                        <span
-                          style={{
-                            marginLeft: 6,
-                            color: pct >= 90 ? "red" : "white",
-                          }}
-                        >
+                        <span className={pct >= 90 ? "budget-usage--warning" : undefined}>
                           ({Math.round(pct)}%)
                         </span>
                       ) : null}
@@ -189,11 +181,11 @@ export default function BudgetLimitsPanel({
         </div>
       )}
 
-      <div style={{ marginBottom: "2rem", marginTop: "2rem" }}>
+      <div className="section">
         <h2 className="h2">Set Budget Limit</h2>
 
-        <div className="form-row">
-          <select value={limitCategory} onChange={(e) => setLimitCategory(e.target.value)}>
+        <div className="form-grid">
+          <FormField label="Category">{(id) => <select id={id} value={limitCategory} onChange={(e) => setLimitCategory(e.target.value)}>
             <option value="">Category</option>
             {DEFAULT_CATEGORIES.map((c) => (
               <option key={c} value={c.toLowerCase()}>
@@ -201,18 +193,18 @@ export default function BudgetLimitsPanel({
               </option>
             ))}
             <option value="other">Other</option>
-          </select>
+          </select>}</FormField>
 
           {limitCategory === "other" && (
-            <input
+            <FormField label="Custom category">{(id) => <input id={id}
               type="text"
               placeholder="Custom Category"
               value={limitCustomCategory}
               onChange={(e) => setLimitCustomCategory(e.target.value)}
-            />
+            />}</FormField>
           )}
 
-          <input
+          <FormField label="Limit amount">{(id) => <input id={id}
             type="text"
             placeholder="Limit Amount"
             value={limitAmount}
@@ -223,17 +215,17 @@ export default function BudgetLimitsPanel({
                 setLimitAmount(value);
               }
             }}
-          />
+          />}</FormField>
 
-          <input
+          <FormField label="Budget month">{(id) => <input id={id}
             type="month"
             value={limitMonthYear}
             onChange={(e) => setLimitMonthYear(e.target.value)}
-          />
+          />}</FormField>
 
           <button onClick={handleSetBudgetLimit}>Save Limit</button>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }

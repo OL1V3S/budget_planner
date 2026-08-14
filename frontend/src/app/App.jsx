@@ -6,6 +6,7 @@ import AuthPage from "../features/auth/components/AuthPage";
 import ConfirmEmailPage from "../features/auth/components/ConfirmEmailPage";
 import ForgotPasswordPage from "../features/auth/components/ForgotPasswordPage";
 import ResetPasswordPage from "../features/auth/components/ResetPasswordPage";
+import ThemeControl from "../shared/theme/ThemeControl";
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(
@@ -22,10 +23,8 @@ export default function App() {
     return (
       <>
         <div className="top-bar">
-          <span>{localStorage.getItem("email")}</span>
-          <button className="button-ghost" onClick={handleLogout}>
-            Logout
-          </button>
+          <span className="top-bar__identity">{localStorage.getItem("email")}</span>
+          <button className="button-ghost" onClick={handleLogout}>Logout</button>
         </div>
 
         <ExpensesPage />
@@ -34,7 +33,9 @@ export default function App() {
   }
 
   return (
-    <Routes>
+    <>
+      <div className="theme-dock"><ThemeControl /></div>
+      <Routes>
       <Route
         path="/"
         element={
@@ -51,6 +52,7 @@ export default function App() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+      </Routes>
+    </>
   );
 }

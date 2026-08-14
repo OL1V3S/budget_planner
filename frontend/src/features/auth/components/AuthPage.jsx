@@ -156,6 +156,7 @@ export default function AuthPage({ onLogin }) {
         <button
             type="button"
             className="password-toggle"
+            aria-label={showPassword ? "Hide password" : "Show password"}
             onClick={() => setShowPassword((prev) => !prev)}
         >
             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -186,6 +187,7 @@ export default function AuthPage({ onLogin }) {
                 <button
                     type="button"
                     className="password-toggle"
+                    aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
                     onClick={() => setShowConfirmPassword((prev) => !prev)}
                 >
                     {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}

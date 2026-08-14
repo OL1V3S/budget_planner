@@ -6,7 +6,12 @@ import AuthPage from "../features/auth/components/AuthPage";
 import ConfirmEmailPage from "../features/auth/components/ConfirmEmailPage";
 import ForgotPasswordPage from "../features/auth/components/ForgotPasswordPage";
 import ResetPasswordPage from "../features/auth/components/ResetPasswordPage";
-import ThemeControl from "../shared/theme/ThemeControl";
+import AppShell from "./AppShell";
+import ProtectedRoute from "./ProtectedRoute";
+import OverviewPage from "./pages/OverviewPage";
+import CompatibilityPage from "./pages/CompatibilityPage";
+import InvestingPage from "./pages/InvestingPage";
+import SettingsPage from "./pages/SettingsPage";
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(
@@ -19,28 +24,13 @@ export default function App() {
     setIsLoggedIn(false);
   }
 
-  function Dashboard() {
-    return (
-      <>
-        <div className="top-bar">
-          <span className="top-bar__identity">{localStorage.getItem("email")}</span>
-          <button className="button-ghost" onClick={handleLogout}>Logout</button>
-        </div>
-
-        <ExpensesPage />
-      </>
-    );
-  }
-
   return (
-    <>
-      <div className="theme-dock"><ThemeControl /></div>
-      <Routes>
+    <Routes>
       <Route
         path="/"
         element={
           isLoggedIn ? (
-            <Dashboard />
+            <Navigate to="/overview" replace />
           ) : (
             <AuthPage onLogin={() => setIsLoggedIn(true)} />
           )
@@ -51,8 +41,30 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
+      <Route element={<ProtectedRoute isAuthenticated={isLoggedIn} />}>
+        <Route element={<AppShell email={localStorage.getItem("email")} onLogout={handleLogout} />}>
+          <Route path="/overview" element={<OverviewPage />} />
+          <Route path="/transactions" element={<ExpensesPage />} />
+          <Route path="/budgets" element={(
+            <CompatibilityPage
+              title="Budgets"
+              description="Budget limits remain available with transactions until their dedicated page is extracted."
+              actionLabel="Open budget limits"
+            />
+          )} />
+          <Route path="/analytics" element={(
+            <CompatibilityPage
+              title="Analytics"
+              description="The existing spending chart remains with transactions until the analytics page is extracted."
+              actionLabel="Open spending chart"
+            />
+          )} />
+          <Route path="/investing" element={<InvestingPage />} />
+          <Route path="/settings" element={<SettingsPage email={localStorage.getItem("email")} />} />
+        </Route>
+      </Route>
+
       <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </>
+    </Routes>
   );
 }

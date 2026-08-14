@@ -13,16 +13,16 @@
   --space-5: 1.5rem;
   --space-6: 2rem;
   --space-7: 3rem;
-  --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.25rem;
   --radius-pill: 999px;
   --duration-fast: 120ms;
   --duration-normal: 200ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --chart-1: #2563eb;
-  --chart-2: #14b8a6;
-  --chart-3: #f59e0b;
-  --chart-4: #8b5cf6;
-  --chart-5: #ec4899;
+  --chart-1: #e94f2d;
+  --chart-2: #6f6b66;
+  --chart-3: #b49a7f;
+  --chart-4: #3d3b38;
+  --chart-5: #b6422a;
 }

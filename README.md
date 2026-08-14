@@ -213,6 +213,35 @@ or backward-incompatible migrations require extra review and a verified Neon
 backup, branch, or other recovery plan appropriate to the active Neon plan before
 execution.
 
+## Data Protection key persistence
+
+ASP.NET Core Identity confirmation and password-reset tokens depend on the
+application's Data Protection key ring. Render Free has an ephemeral filesystem,
+so the backend uses the stable application name `BudgetPlanner` and persists the
+key ring in Neon's `DataProtectionKeys` table instead of the container filesystem.
+This lets outstanding tokens remain valid across normal restarts and redeploys,
+subject to their existing expiration and Identity security-stamp semantics.
+
+The V1 key XML is not additionally wrapped with an application-managed certificate.
+This deployment relies on Neon's platform encryption at rest, TLS, PostgreSQL
+access controls, Render secret storage for the connection string, and restricted
+Render/Neon account access. A principal or database dump that can logically read
+`DataProtectionKeys.Xml` may therefore obtain usable Data Protection master-key
+material. Treat database credentials and dumps as highly sensitive, never log or
+expose the key XML, and don't commit key material.
+
+Don't delete old Data Protection keys as routine cleanup. Deletion can permanently
+invalidate outstanding protected payloads. The first deployment that enables
+database persistence also can't rescue tokens generated with old ephemeral keys
+that have already been lost.
+
+Apply the migration that creates `DataProtectionKeys` and verify it in Neon before
+merging or deploying application code that uses database-backed keys. The current
+application can remain live while this additive migration is applied. Afterward,
+verify the migration history and table, deploy the matching commit, generate a
+fresh confirmation or reset token, restart/redeploy Render, and confirm that the
+pre-restart token still works.
+
 ### 3. Configure and run the frontend
 
 In a separate terminal:

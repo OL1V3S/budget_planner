@@ -94,8 +94,9 @@ export default function BudgetLimitsPanel({
       ) : Object.keys(budgetLimitsByCategory).length === 0 ? (
         <p className="empty-state">No budget limits set for this month.</p>
       ) : (
-        <div className="table-wrapper">
+        <div className="table-wrapper" role="region" aria-label="Budget limits table" tabIndex="0">
           <table className="data-table" border="1" cellPadding="6">
+            <caption className="sr-only">Budget limits for {limitMonthYear}</caption>
             <thead>
               <tr>
                 <th>Category</th>
@@ -124,6 +125,7 @@ export default function BudgetLimitsPanel({
                     <td>
                       {editingBudgetCategory === cat ? (
                         <input
+                          aria-label={`Limit amount for ${displayText(cat)}`}
                           type="text"
                           value={editingBudgetData.limitAmount}
                           onChange={(e) => {

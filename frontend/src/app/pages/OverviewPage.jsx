@@ -101,17 +101,17 @@ export default function OverviewPage() {
           </Card>
           <Card className="overview-module overview-module--budgets">
             <div className="overview-module__heading"><BarChart3 size={22} aria-hidden="true" /><span className="overview-module__status">Available now</span></div>
-            <div><h3>Budgets</h3><p>Set and review monthly category limits.</p></div>
+            <div><h2 className="h2">Budgets</h2><p>Set and review monthly category limits.</p></div>
             <Link to="/budgets">Open budgets <span aria-hidden="true">→</span></Link>
           </Card>
           <Card className="overview-module overview-module--analytics">
             <div className="overview-module__heading"><ChartNoAxesCombined size={22} aria-hidden="true" /><span className="overview-module__status">Available now</span></div>
-            <div><h3>Analytics</h3><p>Compare recorded spending with category limits by month.</p></div>
+            <div><h2 className="h2">Analytics</h2><p>Compare recorded spending with category limits by month.</p></div>
             <Link to="/analytics">Open analytics <span aria-hidden="true">→</span></Link>
           </Card>
           <Card className="overview-module overview-module--investing">
             <div className="overview-module__heading"><Landmark size={22} aria-hidden="true" /><span className="overview-module__status">Coming later</span></div>
-            <div><h3 id="future-tools-heading">Investing</h3><p>No portfolio or external service is connected today.</p></div>
+            <div><h2 className="h2">Investing</h2><p>No portfolio or external service is connected today.</p></div>
             <Link to="/investing">See status <span aria-hidden="true">→</span></Link>
           </Card>
       </section>

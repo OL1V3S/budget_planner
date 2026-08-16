@@ -66,7 +66,7 @@ export default function TransactionsPage() {
 
   async function handleAddExpense() {
     if (!newName || !newAmount || !newDate || !newCategory) {
-      alert("Fill out all the fields you silly goose 0_0");
+      alert("Complete all transaction fields.");
       return;
     }
   

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { authApi } from "../../../shared/api/authApi";
 import { Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -13,6 +13,9 @@ export default function AuthPage({ onLogin }) {
   const [confirmationMessage, setConfirmationMessage] = useState("");
   const [resendMessage, setResendMessage] = useState("");
   const [isResending, setIsResending] = useState(false);
+  const emailId = useId();
+  const passwordId = useId();
+  const confirmPasswordId = useId();
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
@@ -137,7 +140,9 @@ export default function AuthPage({ onLogin }) {
             </h2>
 
             <form onSubmit={handleSubmit} className="auth-form">
+          <label className="sr-only" htmlFor={emailId}>Email</label>
           <input
+            id={emailId}
             type="email"
             placeholder="Email"
             value={email}
@@ -145,8 +150,10 @@ export default function AuthPage({ onLogin }) {
             required
           />
 
+        <label className="sr-only" htmlFor={passwordId}>Password</label>
         <div className="password-field">
         <input
+            id={passwordId}
             type={showPassword ? "text" : "password"}
             placeholder="Password"
             value={password}
@@ -176,8 +183,10 @@ export default function AuthPage({ onLogin }) {
 
           {mode === "register" && (
             <>
+              <label className="sr-only" htmlFor={confirmPasswordId}>Confirm password</label>
               <div className="password-field">
                 <input
+                    id={confirmPasswordId}
                     type={showConfirmPassword ? "text" : "password"}
                     placeholder="Confirm Password"
                     value={confirmPassword}

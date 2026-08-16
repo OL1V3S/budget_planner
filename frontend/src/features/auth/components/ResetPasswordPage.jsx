@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { authApi } from "../../../shared/api/authApi";
@@ -10,6 +10,7 @@ export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
+  const passwordId = useId();
 
   const email = searchParams.get("email");
   const token = searchParams.get("token");
@@ -37,8 +38,10 @@ export default function ResetPasswordPage() {
         <h2 className="h2">Reset Password</h2>
 
         <form onSubmit={handleSubmit} className="auth-form">
+          <label className="sr-only" htmlFor={passwordId}>New password</label>
           <div className="password-field">
             <input
+              id={passwordId}
               type={showPassword ? "text" : "password"}
               placeholder="New password"
               value={password}

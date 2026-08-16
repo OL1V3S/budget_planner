@@ -1,4 +1,5 @@
 // src/components/charts/SpendingChart.jsx
+import { useId } from "react";
 import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -12,7 +13,13 @@ import { displayText } from "../../utils/text";
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
 
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+});
+
 export default function SpendingChart({ totalsByCategory, budgetLimitsByCategory }) {
+  const summaryHeadingId = useId();
   const totals = totalsByCategory ?? {};
   const limits = budgetLimitsByCategory ?? {};
 
@@ -20,7 +27,7 @@ export default function SpendingChart({ totalsByCategory, budgetLimitsByCategory
     new Set([...Object.keys(totals), ...Object.keys(limits)])
   );
 
-  if (categories.length === 0) return <p>No data to display chart.</p>;
+  if (categories.length === 0) return <p className="empty-state">No data to display chart.</p>;
 
   const spentAmounts = categories.map((cat) => Number(totals[cat] || 0));
   const limitAmounts = categories.map((cat) =>
@@ -54,5 +61,30 @@ export default function SpendingChart({ totalsByCategory, budgetLimitsByCategory
     },
   };
 
-  return <Bar data={data} options={options} />;
+  const chartRows = data.labels.map((label, index) => ({
+    categoryKey: categories[index],
+    label,
+    spent: spentAmounts[index],
+    limit: limitAmounts[index],
+  }));
+
+  return (
+    <>
+      <div aria-hidden="true">
+        <Bar data={data} options={options} />
+      </div>
+      <section className="chart-summary" aria-labelledby={summaryHeadingId}>
+        <h3 id={summaryHeadingId}>Spending and budget limit data</h3>
+        <ul className="chart-summary__list">
+          {chartRows.map((row) => (
+            <li key={row.categoryKey} className="chart-summary__item">
+              <strong>{row.label}</strong>
+              <span>Spent: {currencyFormatter.format(row.spent)}</span>
+              <span>Budget limit: {currencyFormatter.format(row.limit)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </>
+  );
 }

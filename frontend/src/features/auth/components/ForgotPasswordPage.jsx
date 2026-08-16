@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authApi } from "../../../shared/api/authApi";
 
@@ -7,6 +7,7 @@ export default function ForgotPasswordPage() {
   const [message, setMessage] = useState("");
   const [resendMessage, setResendMessage] = useState("");
   const [isResending, setIsResending] = useState(false);
+  const emailId = useId();
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
@@ -51,7 +52,9 @@ export default function ForgotPasswordPage() {
         </p>
 
         <form onSubmit={handleSubmit} className="auth-form mt-2">
+          <label className="sr-only" htmlFor={emailId}>Email</label>
           <input
+            id={emailId}
             type="email"
             placeholder="Email"
             value={email}

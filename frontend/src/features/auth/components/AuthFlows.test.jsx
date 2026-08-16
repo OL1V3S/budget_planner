@@ -32,6 +32,8 @@ describe('existing authentication flows', () => {
     authApi.login.mockResolvedValue({ data: { token: 'jwt-value', email: 'person@example.com' } })
     renderAt(<AuthPage onLogin={onLogin} />)
 
+    expect(screen.getByLabelText('Email')).toBe(screen.getByPlaceholderText('Email'))
+    expect(screen.getByLabelText('Password')).toBe(screen.getByPlaceholderText('Password'))
     await user.type(screen.getByPlaceholderText('Email'), 'person@example.com')
     await user.type(screen.getByPlaceholderText('Password'), 'Secret1!')
     await user.click(screen.getByRole('button', { name: 'Log In' }))
@@ -56,6 +58,7 @@ describe('existing authentication flows', () => {
     renderAt(<AuthPage onLogin={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: 'Need an account? Register' }))
+    expect(screen.getByLabelText('Confirm password')).toBe(screen.getByPlaceholderText('Confirm Password'))
     await user.type(screen.getByPlaceholderText('Email'), 'person@example.com')
     await user.type(screen.getByPlaceholderText('Password'), 'Secret1!')
     await user.type(screen.getByPlaceholderText('Confirm Password'), 'Secret1!')
@@ -88,6 +91,7 @@ describe('existing authentication flows', () => {
     authApi.resetPassword.mockResolvedValue({ data: { message: 'ok' } })
     renderAt(<ResetPasswordPage />, '/reset-password?email=person%40example.com&token=reset%2Btoken')
 
+    expect(screen.getByLabelText('New password')).toBe(screen.getByPlaceholderText('New password'))
     await user.type(screen.getByPlaceholderText('New password'), 'NewSecret1!')
     await user.click(screen.getByRole('button', { name: 'Reset Password' }))
 
@@ -105,6 +109,7 @@ describe('existing authentication flows', () => {
     })
     renderAt(<ForgotPasswordPage />, '/forgot-password')
 
+    expect(screen.getByLabelText('Email')).toBe(screen.getByPlaceholderText('Email'))
     await user.type(screen.getByPlaceholderText('Email'), 'unknown@example.com')
     await user.click(screen.getByRole('button', { name: 'Send Reset Link' }))
 

@@ -39,4 +39,23 @@ describe("ThemeControl", () => {
 
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
   });
+
+  it("gives multiple controls unique ids and synchronizes them through one provider", async () => {
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider>
+        <ThemeControl label="Header theme" />
+        <ThemeControl label="Theme preference" />
+      </ThemeProvider>
+    );
+
+    const headerControl = screen.getByRole("combobox", { name: "Header theme" });
+    const settingsControl = screen.getByRole("combobox", { name: "Theme preference" });
+    expect(headerControl.id).not.toBe(settingsControl.id);
+
+    await user.selectOptions(settingsControl, "dark");
+    expect(headerControl).toHaveValue("dark");
+    expect(settingsControl).toHaveValue("dark");
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
+  });
 });

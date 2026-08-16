@@ -170,11 +170,18 @@ describe('application routes and shell', () => {
     expect(screen.queryByRole('navigation', { name: 'Primary navigation' })).not.toBeInTheDocument()
   })
 
-  it('keeps theme selection functional in the shell header', async () => {
+  it('keeps shell and Settings theme controls unique and synchronized', async () => {
     const user = userEvent.setup()
     localStorage.setItem('token', 'jwt-value')
     renderAt('/settings')
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Theme' }), 'dark')
+
+    const shellControl = screen.getByRole('combobox', { name: 'Theme' })
+    const settingsControl = screen.getByRole('combobox', { name: 'Theme preference' })
+    expect(shellControl.id).not.toBe(settingsControl.id)
+
+    await user.selectOptions(settingsControl, 'dark')
+    expect(shellControl).toHaveValue('dark')
+    expect(settingsControl).toHaveValue('dark')
     expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
     expect(localStorage.getItem('budget-planner-theme')).toBe('dark')
   })
@@ -184,7 +191,7 @@ describe('application routes and shell', () => {
     vi.stubGlobal('fetch', fetchSpy)
     localStorage.setItem('token', 'jwt-value')
     renderAt('/investing')
-    expect(screen.getByRole('heading', { name: 'Not connected yet' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'No investment source connected' })).toBeInTheDocument()
     await waitFor(() => expect(fetchSpy).not.toHaveBeenCalled())
   })
 

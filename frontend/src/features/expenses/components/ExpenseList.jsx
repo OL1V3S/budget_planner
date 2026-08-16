@@ -19,8 +19,9 @@ export default function ExpenseList({
 
   return (
     <Card as="section" className="section">
-      <div className="table-wrapper">
+      <div className="table-wrapper" role="region" aria-label="Expenses table" tabIndex="0">
         <table className="data-table" border="1" cellPadding="6">
+          <caption className="sr-only">Expenses</caption>
           <thead>
             <tr>
               <th>Description</th>

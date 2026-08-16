@@ -103,6 +103,14 @@ describe('application routes and shell', () => {
     currentLinks.forEach((link) => expect(link).toHaveAttribute('aria-current', 'page'))
   })
 
+  it('provides a keyboard skip link to the main content', () => {
+    localStorage.setItem('token', 'jwt-value')
+    renderAt('/overview')
+
+    expect(screen.getByRole('link', { name: 'Skip to main content' })).toHaveAttribute('href', '#main-content')
+    expect(document.getElementById('main-content')).toHaveAttribute('id', 'main-content')
+  })
+
   it('exposes five primary destinations in mobile navigation and keeps Settings directly reachable', () => {
     localStorage.setItem('token', 'jwt-value')
     renderAt('/overview')

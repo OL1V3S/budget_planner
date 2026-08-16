@@ -59,7 +59,10 @@ describe('existing budget-limit workflows', () => {
     />)
 
     const row = screen.getByText('Home Repair').closest('tr')
+    expect(screen.getByRole('region', { name: 'Budget limits table' })).toHaveAttribute('tabindex', '0')
+    expect(screen.getByText('Budget limits for 2026-08', { selector: 'caption' })).toBeInTheDocument()
     await user.click(within(row).getByRole('button', { name: 'Edit' }))
+    expect(within(row).getByLabelText('Limit amount for Home Repair')).toBeInTheDocument()
     await user.clear(within(row).getByRole('textbox'))
     await user.type(within(row).getByRole('textbox'), '75.25')
     await user.click(within(row).getByRole('button', { name: 'Save' }))

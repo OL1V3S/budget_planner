@@ -57,6 +57,7 @@ export default function AppShell({ email, onLogout }) {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <aside className="app-sidebar">
         <span className="app-wordmark">Budget Planner</span>
         <nav className="app-nav" aria-label="Primary navigation">

@@ -18,6 +18,7 @@ export default function ExpenseItem({
       <td>
         {isEditing ? (
           <input
+            aria-label="Edit description"
             value={editingData.description || ""}
             onChange={(e) =>
               setEditingData((prev) => ({
@@ -34,6 +35,7 @@ export default function ExpenseItem({
       <td>
         {isEditing ? (
           <input
+            aria-label="Edit amount"
             type="number"
             value={editingData.amount || ""}
             onChange={(e) =>
@@ -53,6 +55,7 @@ export default function ExpenseItem({
       <td>
         {isEditing ? (
           <input
+            aria-label="Edit date"
             type="date"
             value={editingData.date ? editingData.date.slice(0, 10) : ""}
             onChange={(e) =>
@@ -71,6 +74,7 @@ export default function ExpenseItem({
         {isEditing ? (
           <>
             <select
+              aria-label="Edit category"
               value={selectedCategory}
               onChange={(e) =>
                 setEditingData((prev) => ({
@@ -90,6 +94,7 @@ export default function ExpenseItem({
 
             {selectedCategory === "other" && (
               <input
+                aria-label="Edit custom category"
                 type="text"
                 placeholder="Custom Category"
                 value={editingData.customCategory || ""}

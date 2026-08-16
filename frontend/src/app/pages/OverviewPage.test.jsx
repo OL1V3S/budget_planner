@@ -50,6 +50,10 @@ describe('Overview current-month summary', () => {
     const attentionCard = screen.getByText('Budget-limit attention').closest('.card')
     expect(within(attentionCard).getByText('1')).toBeInTheDocument()
     expect(attentionCard).toHaveTextContent('limit is at or above 90% used · 2 limits set')
+    expect(screen.getByRole('heading', { name: 'Transactions', level: 2 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Budgets', level: 2 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Analytics', level: 2 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Investing', level: 2 })).toBeInTheDocument()
   })
 
   it('shows a loading status instead of transient metrics', () => {

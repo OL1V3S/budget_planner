@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import TransactionsPage from "../features/transactions/pages/TransactionsPage";
+import BudgetsPage from "../features/budgetLimits/pages/BudgetsPage";
 import AuthPage from "../features/auth/components/AuthPage";
 import ConfirmEmailPage from "../features/auth/components/ConfirmEmailPage";
 import ForgotPasswordPage from "../features/auth/components/ForgotPasswordPage";
@@ -45,13 +46,7 @@ export default function App() {
         <Route element={<AppShell email={localStorage.getItem("email")} onLogout={handleLogout} />}>
           <Route path="/overview" element={<OverviewPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
-          <Route path="/budgets" element={(
-            <CompatibilityPage
-              title="Budgets"
-              description="Budget limits remain available with transactions until their dedicated page is extracted."
-              actionLabel="Open budget limits"
-            />
-          )} />
+          <Route path="/budgets" element={<BudgetsPage />} />
           <Route path="/analytics" element={(
             <CompatibilityPage
               title="Analytics"

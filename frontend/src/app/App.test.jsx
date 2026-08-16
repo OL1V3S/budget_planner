@@ -9,6 +9,10 @@ vi.mock('../features/transactions/pages/TransactionsPage', () => ({
   default: () => <h1>Transactions workspace</h1>,
 }))
 
+vi.mock('../features/budgetLimits/pages/BudgetsPage', () => ({
+  default: () => <h1>Budgets workspace</h1>,
+}))
+
 vi.mock('../features/auth/components/AuthPage', () => ({
   default: () => <h1>Authentication content</h1>,
 }))
@@ -71,7 +75,7 @@ describe('application routes and shell', () => {
   it.each([
     ['/overview', 'Welcome back'],
     ['/transactions', 'Transactions workspace'],
-    ['/budgets', 'Budgets'],
+    ['/budgets', 'Budgets workspace'],
     ['/analytics', 'Analytics'],
     ['/investing', 'Investing'],
     ['/settings', 'Settings'],
@@ -176,15 +180,20 @@ describe('application routes and shell', () => {
     await waitFor(() => expect(fetchSpy).not.toHaveBeenCalled())
   })
 
-  it.each([
-    ['/budgets', 'Open budget limits'],
-    ['/analytics', 'Open spending chart'],
-  ])('keeps %s compatibility functionality reachable through Transactions', async (path, actionLabel) => {
+  it('renders the dedicated Budgets surface without redirecting to Transactions', async () => {
+    localStorage.setItem('token', 'jwt-value')
+    renderAt('/budgets')
+
+    expect(await screen.findByRole('heading', { name: 'Budgets workspace' })).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('/budgets')
+  })
+
+  it('keeps Analytics compatibility functionality reachable through Transactions', async () => {
     const user = userEvent.setup()
     localStorage.setItem('token', 'jwt-value')
-    renderAt(path)
+    renderAt('/analytics')
 
-    await user.click(screen.getByRole('link', { name: actionLabel }))
+    await user.click(screen.getByRole('link', { name: 'Open spending chart' }))
 
     expect(await screen.findByRole('heading', { name: 'Transactions workspace' })).toBeInTheDocument()
     expect(screen.getByTestId('location')).toHaveTextContent('/transactions')

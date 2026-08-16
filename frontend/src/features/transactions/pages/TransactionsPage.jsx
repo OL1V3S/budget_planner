@@ -9,11 +9,11 @@ import { DEFAULT_CATEGORIES } from "../../../shared/constants/categories";
 import { normalizeText, isDefaultCategory } from "../../../utils/text";
 
 import SpendingChart from "../../../charts/components/SpendingChart";
-import BudgetLimitsPanel from "../../budgetLimits/components/BudgetLimitsPanel";
 import ExpenseForm from "../../expenses/components/ExpenseForm";
 import ExpenseFilters from "../../expenses/components/ExpenseFilters";
 import ExpenseList from "../../expenses/components/ExpenseList";
 import Card from "../../../shared/ui/Card";
+import FormField from "../../../shared/ui/FormField";
 const ENTRIES_PER_PAGE = 10;
 
 export default function TransactionsPage() {
@@ -25,14 +25,9 @@ export default function TransactionsPage() {
     deleteExpense,
   } = useExpenses();
 
-  const [limitMonthYear, setLimitMonthYear] = useState(getMonthYear(new Date()));
+  const [chartMonthYear, setChartMonthYear] = useState(getMonthYear(new Date()));
 
-  const {
-    budgetLimits,
-    loading: limitsLoading,
-    upsertLimit,
-    deleteLimit,
-  } = useBudgetLimits(limitMonthYear);
+  const { budgetLimits } = useBudgetLimits(chartMonthYear);
 
   const budgetLimitsByCategory = useMemo(() => {
     const obj = {};
@@ -86,8 +81,8 @@ export default function TransactionsPage() {
     : filteredExpenses.slice(0, ENTRIES_PER_PAGE);
 
   const totalsByCategory = useMemo(
-    () => computeMonthlyTotalsByCategory(expenses, limitMonthYear),
-    [expenses, limitMonthYear]
+    () => computeMonthlyTotalsByCategory(expenses, chartMonthYear),
+    [expenses, chartMonthYear]
   );
 
   async function handleAddExpense() {
@@ -179,16 +174,6 @@ export default function TransactionsPage() {
         setCustomCategory={setCustomCategory}
       />
   
-      <BudgetLimitsPanel
-        limitMonthYear={limitMonthYear}
-        setLimitMonthYear={setLimitMonthYear}
-        budgetLimits={budgetLimits}
-        limitsLoading={limitsLoading}
-        totalsByCategory={totalsByCategory}
-        upsertLimit={upsertLimit}
-        deleteLimit={deleteLimit}
-      />
-  
       <ExpenseFilters
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
@@ -219,6 +204,12 @@ export default function TransactionsPage() {
   
       <Card as="section" className="section chart-frame">
         <h2 className="h2">Spending vs Budget Limits</h2>
+        <FormField label="Chart month">{(id) => <input
+          id={id}
+          type="month"
+          value={chartMonthYear}
+          onChange={(e) => setChartMonthYear(e.target.value)}
+        />}</FormField>
         <SpendingChart
           totalsByCategory={totalsByCategory}
           budgetLimitsByCategory={budgetLimitsByCategory}

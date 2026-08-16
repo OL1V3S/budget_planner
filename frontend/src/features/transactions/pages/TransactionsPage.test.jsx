@@ -7,11 +7,12 @@ import { useBudgetLimits } from '../../budgetLimits/hooks/useBudgetLimits'
 
 vi.mock('../../expenses/hooks/useExpenses', () => ({ useExpenses: vi.fn() }))
 vi.mock('../../budgetLimits/hooks/useBudgetLimits', () => ({ useBudgetLimits: vi.fn() }))
-vi.mock('../../budgetLimits/components/BudgetLimitsPanel', () => ({
-  default: () => <div data-testid="budget-panel" />,
-}))
 vi.mock('../../../charts/components/SpendingChart', () => ({
-  default: () => <div data-testid="spending-chart" />,
+  default: ({ totalsByCategory, budgetLimitsByCategory }) => (
+    <div data-testid="spending-chart">
+      {JSON.stringify({ totalsByCategory, budgetLimitsByCategory })}
+    </div>
+  ),
 }))
 
 const baseExpensesHook = {
@@ -133,12 +134,33 @@ describe('existing expense workflows', () => {
     expect(screen.getByRole('button', { name: 'Show More' })).toBeInTheDocument()
   })
 
-  it('keeps expense, budget-limit, and spending-chart workflows composed together', () => {
+  it('keeps expense and read-only spending-chart workflows without editable budget controls', () => {
     render(<TransactionsPage />)
 
     expect(screen.getByRole('heading', { name: 'Transactions' })).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Description')).toBeInTheDocument()
-    expect(screen.getByTestId('budget-panel')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Budget Limits for/ })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Chart month')).toBeInTheDocument()
     expect(screen.getByTestId('spending-chart')).toBeInTheDocument()
+  })
+
+  it('updates the read-only chart dependencies when its month changes', () => {
+    useExpenses.mockReturnValue({
+      ...baseExpensesHook,
+      expenses: [{ id: 1, category: 'food', amount: 12.34, date: '2026-07-10T00:00:00Z' }],
+    })
+    useBudgetLimits.mockReturnValue({
+      budgetLimits: [{ id: 7, category: 'food', limitAmount: 100 }],
+      loading: false,
+      upsertLimit: vi.fn(),
+      deleteLimit: vi.fn(),
+    })
+    render(<TransactionsPage />)
+
+    fireEvent.change(screen.getByLabelText('Chart month'), { target: { value: '2026-07' } })
+
+    expect(useBudgetLimits).toHaveBeenLastCalledWith('2026-07')
+    expect(screen.getByTestId('spending-chart')).toHaveTextContent('"totalsByCategory":{"food":12.34}')
+    expect(screen.getByTestId('spending-chart')).toHaveTextContent('"limitAmount":100')
   })
 })

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 
 import TransactionsPage from "../features/transactions/pages/TransactionsPage";
 import BudgetsPage from "../features/budgetLimits/pages/BudgetsPage";
+import AnalyticsPage from "../features/analytics/pages/AnalyticsPage";
 import AuthPage from "../features/auth/components/AuthPage";
 import ConfirmEmailPage from "../features/auth/components/ConfirmEmailPage";
 import ForgotPasswordPage from "../features/auth/components/ForgotPasswordPage";
@@ -10,7 +11,6 @@ import ResetPasswordPage from "../features/auth/components/ResetPasswordPage";
 import AppShell from "./AppShell";
 import ProtectedRoute from "./ProtectedRoute";
 import OverviewPage from "./pages/OverviewPage";
-import CompatibilityPage from "./pages/CompatibilityPage";
 import InvestingPage from "./pages/InvestingPage";
 import SettingsPage from "./pages/SettingsPage";
 
@@ -47,13 +47,7 @@ export default function App() {
           <Route path="/overview" element={<OverviewPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/budgets" element={<BudgetsPage />} />
-          <Route path="/analytics" element={(
-            <CompatibilityPage
-              title="Analytics"
-              description="The existing spending chart remains with transactions until the analytics page is extracted."
-              actionLabel="Open spending chart"
-            />
-          )} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/investing" element={<InvestingPage />} />
           <Route path="/settings" element={<SettingsPage email={localStorage.getItem("email")} />} />
         </Route>

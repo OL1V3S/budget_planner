@@ -1,11 +1,11 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import ExpensesPage from './ExpensesPage'
-import { useExpenses } from '../hooks/useExpenses'
+import TransactionsPage from './TransactionsPage'
+import { useExpenses } from '../../expenses/hooks/useExpenses'
 import { useBudgetLimits } from '../../budgetLimits/hooks/useBudgetLimits'
 
-vi.mock('../hooks/useExpenses', () => ({ useExpenses: vi.fn() }))
+vi.mock('../../expenses/hooks/useExpenses', () => ({ useExpenses: vi.fn() }))
 vi.mock('../../budgetLimits/hooks/useBudgetLimits', () => ({ useBudgetLimits: vi.fn() }))
 vi.mock('../../budgetLimits/components/BudgetLimitsPanel', () => ({
   default: () => <div data-testid="budget-panel" />,
@@ -38,7 +38,7 @@ describe('existing expense workflows', () => {
     const user = userEvent.setup()
     const addExpense = vi.fn().mockResolvedValue(undefined)
     useExpenses.mockReturnValue({ ...baseExpensesHook, addExpense })
-    render(<ExpensesPage />)
+    render(<TransactionsPage />)
 
     await user.type(screen.getByPlaceholderText('Description'), '  Dinner With Friends  ')
     await user.type(screen.getByPlaceholderText('Amount'), '12.50')
@@ -58,7 +58,7 @@ describe('existing expense workflows', () => {
     const user = userEvent.setup()
     const addExpense = vi.fn().mockResolvedValue(undefined)
     useExpenses.mockReturnValue({ ...baseExpensesHook, addExpense })
-    render(<ExpensesPage />)
+    render(<TransactionsPage />)
 
     await user.type(screen.getByPlaceholderText('Description'), 'Prescription')
     await user.type(screen.getByPlaceholderText('Amount'), '8')
@@ -86,7 +86,7 @@ describe('existing expense workflows', () => {
         category: 'medical',
       }],
     })
-    render(<ExpensesPage />)
+    render(<TransactionsPage />)
 
     const row = screen.getByText('Medical').closest('tr')
     await user.click(within(row).getByRole('button', { name: 'Edit' }))
@@ -122,7 +122,7 @@ describe('existing expense workflows', () => {
         category: 'food',
       })),
     })
-    render(<ExpensesPage />)
+    render(<TransactionsPage />)
 
     expect(screen.getAllByRole('row')).toHaveLength(11)
     await user.click(screen.getByRole('button', { name: 'Show More' }))
@@ -131,5 +131,14 @@ describe('existing expense workflows', () => {
     await user.type(screen.getByPlaceholderText('Search description or category...'), 'expense')
     await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(11))
     expect(screen.getByRole('button', { name: 'Show More' })).toBeInTheDocument()
+  })
+
+  it('keeps expense, budget-limit, and spending-chart workflows composed together', () => {
+    render(<TransactionsPage />)
+
+    expect(screen.getByRole('heading', { name: 'Transactions' })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Description')).toBeInTheDocument()
+    expect(screen.getByTestId('budget-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('spending-chart')).toBeInTheDocument()
   })
 })

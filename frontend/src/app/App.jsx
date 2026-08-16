@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
-import ExpensesPage from "../features/expenses/components/ExpensesPage";
+import TransactionsPage from "../features/transactions/pages/TransactionsPage";
 import AuthPage from "../features/auth/components/AuthPage";
 import ConfirmEmailPage from "../features/auth/components/ConfirmEmailPage";
 import ForgotPasswordPage from "../features/auth/components/ForgotPasswordPage";
@@ -44,7 +44,7 @@ export default function App() {
       <Route element={<ProtectedRoute isAuthenticated={isLoggedIn} />}>
         <Route element={<AppShell email={localStorage.getItem("email")} onLogout={handleLogout} />}>
           <Route path="/overview" element={<OverviewPage />} />
-          <Route path="/transactions" element={<ExpensesPage />} />
+          <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/budgets" element={(
             <CompatibilityPage
               title="Budgets"

@@ -1,22 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { useExpenses } from "../hooks/useExpenses";
+import { useExpenses } from "../../expenses/hooks/useExpenses";
 import { useBudgetLimits } from "../../budgetLimits/hooks/useBudgetLimits";
 
 import { getMonthYear } from "../../../shared/utils/monthYear";
-import { filterExpenses } from "../utils/filterExpenses";
+import { filterExpenses } from "../../expenses/utils/filterExpenses";
 import { computeMonthlyTotalsByCategory } from "../../budgetLimits/utils/totalsByCategory";
 import { DEFAULT_CATEGORIES } from "../../../shared/constants/categories";
 import { normalizeText, isDefaultCategory } from "../../../utils/text";
 
 import SpendingChart from "../../../charts/components/SpendingChart";
 import BudgetLimitsPanel from "../../budgetLimits/components/BudgetLimitsPanel";
-import ExpenseForm from "./ExpenseForm";
-import ExpenseFilters from "./ExpenseFilters";
-import ExpenseList from "./ExpenseList";
+import ExpenseForm from "../../expenses/components/ExpenseForm";
+import ExpenseFilters from "../../expenses/components/ExpenseFilters";
+import ExpenseList from "../../expenses/components/ExpenseList";
 import Card from "../../../shared/ui/Card";
 const ENTRIES_PER_PAGE = 10;
 
-export default function ExpensesPage() {
+export default function TransactionsPage() {
   const {
     expenses,
     loading: expensesLoading,
@@ -159,7 +159,7 @@ export default function ExpensesPage() {
       <header className="page-header">
         <div>
           <p className="page-header__eyebrow">Your finances</p>
-          <h1>Budget Planner</h1>
+          <h1>Transactions</h1>
           <p className="muted">Track spending and keep monthly limits in view.</p>
         </div>
       </header>

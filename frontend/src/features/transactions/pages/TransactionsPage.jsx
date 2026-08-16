@@ -1,19 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useExpenses } from "../../expenses/hooks/useExpenses";
-import { useBudgetLimits } from "../../budgetLimits/hooks/useBudgetLimits";
 
-import { getMonthYear } from "../../../shared/utils/monthYear";
 import { filterExpenses } from "../../expenses/utils/filterExpenses";
-import { computeMonthlyTotalsByCategory } from "../../budgetLimits/utils/totalsByCategory";
 import { DEFAULT_CATEGORIES } from "../../../shared/constants/categories";
 import { normalizeText, isDefaultCategory } from "../../../utils/text";
 
-import SpendingChart from "../../../charts/components/SpendingChart";
 import ExpenseForm from "../../expenses/components/ExpenseForm";
 import ExpenseFilters from "../../expenses/components/ExpenseFilters";
 import ExpenseList from "../../expenses/components/ExpenseList";
-import Card from "../../../shared/ui/Card";
-import FormField from "../../../shared/ui/FormField";
 const ENTRIES_PER_PAGE = 10;
 
 export default function TransactionsPage() {
@@ -24,16 +18,6 @@ export default function TransactionsPage() {
     updateExpense,
     deleteExpense,
   } = useExpenses();
-
-  const [chartMonthYear, setChartMonthYear] = useState(getMonthYear(new Date()));
-
-  const { budgetLimits } = useBudgetLimits(chartMonthYear);
-
-  const budgetLimitsByCategory = useMemo(() => {
-    const obj = {};
-    for (const l of budgetLimits ?? []) obj[l.category] = l;
-    return obj;
-  }, [budgetLimits]);
 
   // Add expense UI state
   const [newName, setNewName] = useState("");
@@ -79,11 +63,6 @@ export default function TransactionsPage() {
   const expensesToShow = showAll
     ? filteredExpenses
     : filteredExpenses.slice(0, ENTRIES_PER_PAGE);
-
-  const totalsByCategory = useMemo(
-    () => computeMonthlyTotalsByCategory(expenses, chartMonthYear),
-    [expenses, chartMonthYear]
-  );
 
   async function handleAddExpense() {
     if (!newName || !newAmount || !newDate || !newCategory) {
@@ -155,7 +134,7 @@ export default function TransactionsPage() {
         <div>
           <p className="page-header__eyebrow">Your finances</p>
           <h1>Transactions</h1>
-          <p className="muted">Track spending and keep monthly limits in view.</p>
+          <p className="muted">Record, review, and organize your expenses.</p>
         </div>
       </header>
   
@@ -201,20 +180,6 @@ export default function TransactionsPage() {
         onCancel={cancelEditExpense}
         onDelete={deleteExpense}
       />
-  
-      <Card as="section" className="section chart-frame">
-        <h2 className="h2">Spending vs Budget Limits</h2>
-        <FormField label="Chart month">{(id) => <input
-          id={id}
-          type="month"
-          value={chartMonthYear}
-          onChange={(e) => setChartMonthYear(e.target.value)}
-        />}</FormField>
-        <SpendingChart
-          totalsByCategory={totalsByCategory}
-          budgetLimitsByCategory={budgetLimitsByCategory}
-        />
-      </Card>
     </div>
   );
 }

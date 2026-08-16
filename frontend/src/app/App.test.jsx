@@ -13,6 +13,14 @@ vi.mock('../features/budgetLimits/pages/BudgetsPage', () => ({
   default: () => <h1>Budgets workspace</h1>,
 }))
 
+vi.mock('../features/analytics/pages/AnalyticsPage', () => ({
+  default: () => <h1>Analytics workspace</h1>,
+}))
+
+vi.mock('./pages/OverviewPage', () => ({
+  default: () => <h1>Welcome back</h1>,
+}))
+
 vi.mock('../features/auth/components/AuthPage', () => ({
   default: () => <h1>Authentication content</h1>,
 }))
@@ -76,7 +84,7 @@ describe('application routes and shell', () => {
     ['/overview', 'Welcome back'],
     ['/transactions', 'Transactions workspace'],
     ['/budgets', 'Budgets workspace'],
-    ['/analytics', 'Analytics'],
+    ['/analytics', 'Analytics workspace'],
     ['/investing', 'Investing'],
     ['/settings', 'Settings'],
   ])('supports direct authenticated navigation to %s', async (path, heading) => {
@@ -188,14 +196,11 @@ describe('application routes and shell', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/budgets')
   })
 
-  it('keeps Analytics compatibility functionality reachable through Transactions', async () => {
-    const user = userEvent.setup()
+  it('renders the dedicated Analytics surface without redirecting to Transactions', async () => {
     localStorage.setItem('token', 'jwt-value')
     renderAt('/analytics')
 
-    await user.click(screen.getByRole('link', { name: 'Open spending chart' }))
-
-    expect(await screen.findByRole('heading', { name: 'Transactions workspace' })).toBeInTheDocument()
-    expect(screen.getByTestId('location')).toHaveTextContent('/transactions')
+    expect(await screen.findByRole('heading', { name: 'Analytics workspace' })).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('/analytics')
   })
 })

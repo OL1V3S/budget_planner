@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { ThemeProvider } from '../shared/theme/ThemeProvider'
 
-vi.mock('../features/expenses/components/ExpensesPage', () => ({
+vi.mock('../features/transactions/pages/TransactionsPage', () => ({
   default: () => <h1>Transactions workspace</h1>,
 }))
 
@@ -174,5 +174,19 @@ describe('application routes and shell', () => {
     renderAt('/investing')
     expect(screen.getByRole('heading', { name: 'Not connected yet' })).toBeInTheDocument()
     await waitFor(() => expect(fetchSpy).not.toHaveBeenCalled())
+  })
+
+  it.each([
+    ['/budgets', 'Open budget limits'],
+    ['/analytics', 'Open spending chart'],
+  ])('keeps %s compatibility functionality reachable through Transactions', async (path, actionLabel) => {
+    const user = userEvent.setup()
+    localStorage.setItem('token', 'jwt-value')
+    renderAt(path)
+
+    await user.click(screen.getByRole('link', { name: actionLabel }))
+
+    expect(await screen.findByRole('heading', { name: 'Transactions workspace' })).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('/transactions')
   })
 })

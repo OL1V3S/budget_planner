@@ -16,14 +16,28 @@ using Microsoft.Extensions.Hosting;
 
 namespace BudgetPlanner.Tests.Financial;
 
-internal sealed class FinancialApiTestApplication : WebApplicationFactory<Program>
+internal sealed class FinancialApiTestApplication : FinancialApiTestApplicationBase
 {
-    private const string TestPassword = "Password1!";
-    private const string TestJwtKey =
+    private readonly string _databaseName = $"financial-api-tests-{Guid.NewGuid()}";
+
+    protected override void ConfigureDatabase(IServiceCollection services)
+    {
+        services.AddDbContext<BudgetContext>(options =>
+            options.UseInMemoryDatabase(_databaseName));
+    }
+}
+
+internal abstract class FinancialApiTestApplicationBase : WebApplicationFactory<Program>
+{
+    protected const string TestPassword = "Password1!";
+    protected const string TestJwtKey =
         "test-only-signing-key-that-is-at-least-thirty-two-bytes-long";
     private static readonly object HostStartupLock = new();
-    private readonly string _databaseName = $"financial-api-tests-{Guid.NewGuid()}";
     private bool _hostStarted;
+
+    protected abstract void ConfigureDatabase(IServiceCollection services);
+
+    protected virtual void InitializeDatabase(IServiceProvider services) { }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -32,8 +46,7 @@ internal sealed class FinancialApiTestApplication : WebApplicationFactory<Progra
         {
             services.RemoveAll<DbContextOptions<BudgetContext>>();
             services.RemoveAll<IDbContextOptionsConfiguration<BudgetContext>>();
-            services.AddDbContext<BudgetContext>(options =>
-                options.UseInMemoryDatabase(_databaseName));
+            ConfigureDatabase(services);
 
             services.RemoveAll<IEmailService>();
             services.AddSingleton<IEmailService, NoOpEmailService>();
@@ -179,7 +192,7 @@ internal sealed class FinancialApiTestApplication : WebApplicationFactory<Progra
             try
             {
                 Environment.SetEnvironmentVariable("Jwt__Key", TestJwtKey);
-                _ = Services;
+                InitializeDatabase(Services);
                 _hostStarted = true;
             }
             finally

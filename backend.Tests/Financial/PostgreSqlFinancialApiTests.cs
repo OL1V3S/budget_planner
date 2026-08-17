@@ -146,3 +146,43 @@ internal sealed class PostgreSqlFactAttribute : FactAttribute
         }
     }
 }
+
+public sealed class PostgreSqlDatabaseSafetyTests
+{
+    [Fact]
+    public void Ci_connection_is_accepted()
+    {
+        PostgreSqlFinancialApiTestApplication.ValidateDestructiveDatabaseConnection(
+            "Host=localhost;Database=budget_planner_ci;Username=test;Password=test");
+    }
+
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("127.0.0.1")]
+    [InlineData("::1")]
+    public void Local_test_designated_database_is_accepted(string host)
+    {
+        PostgreSqlFinancialApiTestApplication.ValidateDestructiveDatabaseConnection(
+            $"Host={host};Database=budget_planner_test_safety;Username=test;Password=test");
+    }
+
+    [Fact]
+    public void Remote_host_is_rejected()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            PostgreSqlFinancialApiTestApplication.ValidateDestructiveDatabaseConnection(
+                "Host=example.neon.tech;Database=budget_planner_test_safety;Username=test;Password=test"));
+
+        Assert.Contains("local disposable databases", exception.Message);
+    }
+
+    [Fact]
+    public void Unsafe_database_name_is_rejected()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            PostgreSqlFinancialApiTestApplication.ValidateDestructiveDatabaseConnection(
+                "Host=localhost;Database=budget_planner;Username=test;Password=test"));
+
+        Assert.Contains("local disposable databases", exception.Message);
+    }
+}

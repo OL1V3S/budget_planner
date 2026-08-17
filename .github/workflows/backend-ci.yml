@@ -29,4 +29,59 @@ jobs:
         run: dotnet build backend/backend.csproj --configuration Release --no-restore
 
       - name: Run backend tests
-        run: dotnet test backend.Tests/backend.Tests.csproj --configuration Release --no-restore
+        run: >-
+          dotnet test backend.Tests/backend.Tests.csproj
+          --configuration Release
+          --no-restore
+          --filter "Category!=PostgreSQL"
+
+  postgresql-integration:
+    name: PostgreSQL financial integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: budget_planner_ci
+          POSTGRES_USER: budget_planner_ci
+          POSTGRES_PASSWORD: budget_planner_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U budget_planner_ci -d budget_planner_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      BUDGETPLANNER_POSTGRESQL_TEST_CONNECTION: >-
+        Host=localhost;Port=5432;Database=budget_planner_ci;Username=budget_planner_ci;Password=budget_planner_ci_only;Pooling=false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore backend.Tests/backend.Tests.csproj
+
+      - name: Build PostgreSQL integration tests
+        run: dotnet build backend.Tests/backend.Tests.csproj --configuration Release --no-restore
+
+      - name: Verify migration chain on empty PostgreSQL
+        run: >-
+          dotnet test backend.Tests/backend.Tests.csproj
+          --configuration Release
+          --no-build
+          --filter "Category=PostgreSQL&FullyQualifiedName~Migration_chain"
+
+      - name: Run PostgreSQL financial integration tests
+        run: >-
+          dotnet test backend.Tests/backend.Tests.csproj
+          --configuration Release
+          --no-build
+          --filter "Category=PostgreSQL&FullyQualifiedName!~Migration_chain"

@@ -141,6 +141,58 @@ A draft PR may be published with disclosed local gaps when `AGENTS.md` permits
 it. Missing local tools do not weaken the verification requirement and must
 never be recorded as a pass.
 
+## Codex bridge evidence
+
+When `.github/workflows/codex-agent.yml` is active, distinguish Codex worker
+evidence from the repository's independent proof layer.
+
+For `/codex plan` and `/codex audit`:
+
+- a separate context-preparation job generates a structural repository map and
+  copies only the exact targeted files plus allowed canonical authority docs;
+- the Codex job receives only that pruned artifact, not a full repository
+  checkout;
+- insufficient context must produce a bounded context-expansion request rather
+  than an unreported broad read; and
+- a MEDIUM/HIGH implementation approval is bound to the exact read-only result,
+  governing issue, and base commit before write-mode execution may start.
+
+For `/codex implement` and `/codex fix`:
+
+- Codex may run focused/full checks in its isolated worker, but those results are
+  development evidence only;
+- Codex receives no publication GitHub App token and its checkout has no
+  persisted GitHub credential;
+- exact allowed write paths are mechanically checked before a patch is accepted;
+- the publication job runs separately without `OPENAI_API_KEY`, revalidates the
+  base/PR state, applies the patch, runs `git diff --check`, and publishes only
+  to the intended feature or existing PR branch; and
+- ordinary review fixes stay on the existing PR branch and remain bounded to the
+  review finding. Scope-expanding corrections return to normal planning and
+  approval.
+
+The draft PR then requires the same applicable **Frontend test, lint, and
+build**, **Backend build and tests**, **PostgreSQL financial integration**, and
+Vercel evidence as any other change. Codex saying that tests passed is never a
+replacement for those independent checks.
+
+The bridge also has its own **Codex bridge policy tests** PR check for task
+packet parsing, approval binding, write-path enforcement, helper compilation,
+repository-map generation, and workflow YAML syntax.
+
+One-time repository configuration for the bridge uses these names:
+
+- Actions secret `OPENAI_API_KEY` — a dedicated OpenAI API credential;
+- repository variable `CODEX_PUBLISHER_CLIENT_ID` — client ID of the dedicated
+  publisher GitHub App; and
+- Actions secret `CODEX_PUBLISHER_PRIVATE_KEY` — private key for that App.
+
+The publisher GitHub App should be installed only on this repository and grant
+only **Contents: write** and **Pull requests: write** beyond GitHub's required
+metadata access. It must not receive Actions/workflow administration, secrets,
+deployments, environments, or production credentials. Secret values must never
+be pasted into ChatGPT, issues, pull requests, or repository files.
+
 ## Full review-ready criteria
 
 A draft PR is review-ready only when:

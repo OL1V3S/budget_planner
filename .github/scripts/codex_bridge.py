@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import hashlib
 import json
 import os
@@ -76,8 +75,8 @@ def list_of_paths(packet: dict[str, Any], field: str, *, required: bool) -> list
     if len(raw) > 200:
         fail(f"{field} contains too many entries")
     paths = [safe_repo_path(item, field=field) for item in raw]
-    if field != "allowed_write_paths" and any(any(char in path for char in GLOB_CHARS) for path in paths):
-        fail(f"{field} must name exact files, not glob patterns")
+    if any(any(char in path for char in GLOB_CHARS) for path in paths):
+        fail(f"{field} must use exact files or explicit directory prefixes, not globs")
     if required and not paths:
         fail(f"{field} must not be empty")
     if len(paths) != len(set(paths)):
@@ -279,8 +278,8 @@ def verify_approval(args: argparse.Namespace) -> None:
         fail("approval comment does not belong to the governing issue")
 
     plan_author = ((plan_comment.get("user") or {}).get("login") or "")
-    if plan_author not in {"github-actions[bot]", OWNER}:
-        fail("plan comment was not produced by the trusted workflow/owner")
+    if plan_author != "github-actions[bot]":
+        fail("plan comment was not produced by the trusted Codex workflow")
     plan_body = plan_comment.get("body", "")
     plan = extract_fenced_json(plan_body, PLAN_FENCE_RE, "codex-plan")
     binding = extract_fenced_json(plan_body, PLAN_BINDING_RE, "codex-plan-binding")
@@ -367,8 +366,6 @@ def git_paths(repo: Path) -> set[str]:
 def rule_matches(path: str, rule: str) -> bool:
     if rule.endswith("/"):
         return path.startswith(rule)
-    if any(char in rule for char in GLOB_CHARS):
-        return fnmatch.fnmatchcase(path, rule)
     return path == rule
 
 

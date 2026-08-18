@@ -94,6 +94,32 @@ Do not use destructive git operations unless explicitly authorized.
 
 Prefer exact-path staging over `git add .` or `git add -A`.
 
+### Implementation and publication capabilities
+
+Treat local implementation capability and GitHub publication capability as
+separate concerns.
+
+Before editing, establish the branch and worktree state safely. If local Git or
+an equivalent repository tool cannot establish that state, stop and report the
+missing evidence. Do not edit based on a guessed branch or worktree state.
+
+When implementation is authorized and safe local Git operations are available,
+missing GitHub CLI (`gh`) alone does not block implementation. The agent may
+create the approved feature branch, edit, run available verification, inspect
+the diff, and create an intentional local commit.
+
+Push and draft-PR creation require working publication tooling and
+authentication. If either cannot be completed, stop at the safest durable local
+state, normally a clean local commit, and report **publication handoff
+required**. Include the branch, commit SHA, changed files, verification that
+passed or was unavailable, and the exact remaining publication steps. The human
+repository owner may publish the branch with GitHub Desktop and open the draft
+PR through GitHub Desktop or the GitHub web interface.
+
+Never claim that a push, PR, or CI result exists unless it has been verified.
+Publication handoff does not weaken the requirement for a draft PR, successful
+required CI, independent review, or human merge authority.
+
 ## Risk levels
 
 ### LOW

@@ -1,0 +1,554 @@
+name: Codex Agent Bridge
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-agent-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: >-
+      github.event.comment.user.login == 'OL1V3S' &&
+      (startsWith(github.event.comment.body, '/codex plan') ||
+       startsWith(github.event.comment.body, '/codex audit') ||
+       startsWith(github.event.comment.body, '/codex implement') ||
+       startsWith(github.event.comment.body, '/codex fix'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      mode: ${{ steps.parse.outputs.mode }}
+      risk: ${{ steps.parse.outputs.risk }}
+      issue: ${{ steps.parse.outputs.issue }}
+      pr: ${{ steps.parse.outputs.pr }}
+      base_ref: ${{ steps.parse.outputs.base_ref }}
+      base_sha: ${{ steps.parse.outputs.base_sha }}
+      branch: ${{ steps.parse.outputs.branch }}
+      title: ${{ steps.parse.outputs.title }}
+      requires_approval: ${{ steps.parse.outputs.requires_approval }}
+      plan_sha256: ${{ steps.parse.outputs.plan_sha256 }}
+      needs_frontend: ${{ steps.parse.outputs.needs_frontend }}
+      needs_backend: ${{ steps.parse.outputs.needs_backend }}
+    steps:
+      - name: Checkout trusted bridge code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Capture command comment without shell interpolation
+        env:
+          CODEX_COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          Path(os.environ["RUNNER_TEMP"], "codex-comment.md").write_text(
+              os.environ["CODEX_COMMENT_BODY"], encoding="utf-8"
+          )
+          PY
+
+      - name: Parse and validate task packet
+        id: parse
+        env:
+          EVENT_ISSUE: ${{ github.event.issue.number }}
+        run: >-
+          python3 .github/scripts/codex_bridge.py parse
+          --comment-file "$RUNNER_TEMP/codex-comment.md"
+          --event-issue "$EVENT_ISSUE"
+          --output "$RUNNER_TEMP/task-packet.json"
+
+      - name: Verify exact base branch is still current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ steps.parse.outputs.base_ref }}
+          BASE_SHA: ${{ steps.parse.outputs.base_sha }}
+        run: |
+          ENCODED_REF="$(python3 - <<'PY'
+          import os, urllib.parse
+          print(urllib.parse.quote(os.environ["BASE_REF"], safe=""))
+          PY
+          )"
+          ACTUAL_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$ENCODED_REF" --jq .object.sha)"
+          test "$ACTUAL_SHA" = "$BASE_SHA" || {
+            echo "Task base is stale: expected $BASE_SHA, current $ACTUAL_SHA" >&2
+            exit 1
+          }
+
+      - name: Initialize empty approved plan
+        run: printf '{}\n' > "$RUNNER_TEMP/approved-plan.json"
+
+      - name: Fetch approval-bound plan and human approval marker
+        if: steps.parse.outputs.requires_approval == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLAN_COMMENT_ID: ${{ steps.parse.outputs.plan_comment_id }}
+          APPROVAL_COMMENT_ID: ${{ steps.parse.outputs.approval_comment_id }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/issues/comments/$PLAN_COMMENT_ID" > "$RUNNER_TEMP/plan-comment.json"
+          gh api "repos/$GITHUB_REPOSITORY/issues/comments/$APPROVAL_COMMENT_ID" > "$RUNNER_TEMP/approval-comment.json"
+          python3 .github/scripts/codex_bridge.py verify-approval \
+            --packet "$RUNNER_TEMP/task-packet.json" \
+            --plan-comment "$RUNNER_TEMP/plan-comment.json" \
+            --approval-comment "$RUNNER_TEMP/approval-comment.json" \
+            --output-plan "$RUNNER_TEMP/approved-plan.json"
+
+      - name: Store validated task packet
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-task-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/task-packet.json
+            ${{ runner.temp }}/approved-plan.json
+          if-no-files-found: error
+          retention-days: 1
+
+  prepare_context:
+    needs: prepare
+    if: needs.prepare.outputs.mode == 'plan' || needs.prepare.outputs.mode == 'audit'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact trusted base
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Download validated task packet
+        uses: actions/download-artifact@v4
+        with:
+          name: codex-task-${{ github.run_id }}
+          path: .codex-task
+
+      - name: Generate lightweight structural map
+        run: >-
+          python3 .github/scripts/build_repo_map.py
+          --root .
+          --output "$RUNNER_TEMP/repo-map.txt"
+
+      - name: Build physically pruned planning workspace
+        run: |
+          python3 .github/scripts/codex_bridge.py build-context \
+            --packet .codex-task/task-packet.json \
+            --repo-map "$RUNNER_TEMP/repo-map.txt" \
+            --repo . \
+            --output "$RUNNER_TEMP/codex-context"
+          cp .github/codex/prompts/task.md "$RUNNER_TEMP/codex-context/PROMPT.md"
+          cp .github/codex/schemas/plan-output.json "$RUNNER_TEMP/codex-context/plan-output.json"
+
+      - name: Upload only pruned Codex context
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-context-${{ github.run_id }}
+          path: ${{ runner.temp }}/codex-context
+          if-no-files-found: error
+          retention-days: 1
+
+  codex_readonly:
+    needs: [prepare, prepare_context]
+    if: needs.prepare_context.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      final_message: ${{ steps.run_codex.outputs.final-message }}
+      plan_sha256: ${{ steps.digest.outputs.plan_sha256 }}
+    steps:
+      - name: Download pruned context only
+        uses: actions/download-artifact@v4
+        with:
+          name: codex-context-${{ github.run_id }}
+          path: .codex-context
+
+      - name: Run Codex on pruned read-only context
+        id: run_codex
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1.11
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          codex-version: '0.138.0'
+          permission-profile: ':read-only'
+          safety-strategy: drop-sudo
+          allow-users: OL1V3S
+          working-directory: .codex-context
+          prompt-file: .codex-context/PROMPT.md
+          output-schema-file: .codex-context/plan-output.json
+
+      - name: Canonicalize and hash plan/audit result
+        id: digest
+        env:
+          CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os
+          value = json.loads(os.environ["CODEX_FINAL_MESSAGE"])
+          canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+          digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"plan_sha256={digest}\n")
+          PY
+
+  report_readonly:
+    needs: [prepare, codex_readonly]
+    if: needs.codex_readonly.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Post Codex plan/audit result
+        uses: actions/github-script@v7
+        env:
+          CODEX_FINAL_MESSAGE: ${{ needs.codex_readonly.outputs.final_message }}
+          PLAN_SHA256: ${{ needs.codex_readonly.outputs.plan_sha256 }}
+          MODE: ${{ needs.prepare.outputs.mode }}
+          ISSUE: ${{ needs.prepare.outputs.issue }}
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const binding = JSON.stringify({
+              issue: Number(process.env.ISSUE),
+              mode: process.env.MODE,
+              base_sha: process.env.BASE_SHA,
+              plan_sha256: process.env.PLAN_SHA256,
+            });
+            const body = [
+              `## Codex ${process.env.MODE} result`,
+              '',
+              `Plan/result SHA-256: \`${process.env.PLAN_SHA256}\``,
+              '',
+              '```codex-plan-binding',
+              binding,
+              '```',
+              '',
+              '```codex-plan',
+              process.env.CODEX_FINAL_MESSAGE,
+              '```',
+              '',
+              'This is Codex engineering evidence. MEDIUM/HIGH implementation still requires an owner-authored approval marker bound to this exact digest.',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.ISSUE),
+              body,
+            });
+
+  codex_write:
+    needs: prepare
+    if: needs.prepare.outputs.mode == 'implement' || needs.prepare.outputs.mode == 'fix'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      final_message: ${{ steps.run_codex.outputs.final-message }}
+    steps:
+      - name: Checkout trusted bridge code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Checkout exact task base as data
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: .codex-source
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Download validated task and approved plan
+        uses: actions/download-artifact@v4
+        with:
+          name: codex-task-${{ github.run_id }}
+          path: .codex-task
+
+      - name: Build isolated Codex workspace from task base
+        env:
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+        run: |
+          python3 .github/scripts/build_repo_map.py --root .codex-source --output "$RUNNER_TEMP/repo-map.txt"
+          mkdir -p .codex-workspace
+          git clone --no-hardlinks --no-checkout "$GITHUB_WORKSPACE/.codex-source" .codex-workspace/repo
+          git -C .codex-workspace/repo checkout --detach "$BASE_SHA"
+          mkdir -p .codex-workspace/repo/.codex/authority
+          cp .codex-task/task-packet.json .codex-workspace/repo/.codex/task-packet.json
+          cp .codex-task/approved-plan.json .codex-workspace/repo/.codex/approved-plan.json
+          cp "$RUNNER_TEMP/repo-map.txt" .codex-workspace/repo/.codex/repo-map.txt
+          python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          root = Path.cwd()
+          packet = json.loads((root / ".codex-task/task-packet.json").read_text(encoding="utf-8"))
+          destination_root = root / ".codex-workspace/repo/.codex/authority"
+          for raw in packet["authority_docs"]:
+              source = (root / raw).resolve()
+              source.relative_to(root)
+              if not source.is_file():
+                  raise SystemExit(f"trusted authority document missing from main: {raw}")
+              destination = destination_root / raw
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(source, destination)
+          PY
+          cat >> .codex-workspace/repo/.git/info/exclude <<'EOF'
+          /.codex/
+          /.nuget/
+          /.dotnet-home/
+          /.npm-cache/
+          EOF
+
+      - name: Set up Node.js when frontend context is involved
+        if: needs.prepare.outputs.needs_frontend == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Prepare frontend dependencies before Codex network isolation
+        if: needs.prepare.outputs.needs_frontend == 'true'
+        working-directory: .codex-workspace/repo/frontend
+        env:
+          NPM_CONFIG_CACHE: ${{ github.workspace }}/.codex-workspace/repo/.npm-cache
+        run: npm ci
+
+      - name: Set up .NET when backend context is involved
+        if: needs.prepare.outputs.needs_backend == 'true'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Prepare backend dependencies before Codex network isolation
+        if: needs.prepare.outputs.needs_backend == 'true'
+        env:
+          NUGET_PACKAGES: ${{ github.workspace }}/.codex-workspace/repo/.nuget/packages
+          DOTNET_CLI_HOME: ${{ github.workspace }}/.codex-workspace/repo/.dotnet-home
+        run: dotnet restore .codex-workspace/repo/backend.Tests/backend.Tests.csproj
+
+      - name: Lock Git metadata before dropping sudo
+        run: |
+          sudo chown -R root:root .codex-workspace/repo/.git
+          sudo chmod -R a-w .codex-workspace/repo/.git
+
+      - name: Run Codex implementation/fix in isolated workspace
+        id: run_codex
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1.11
+        env:
+          NUGET_PACKAGES: ${{ github.workspace }}/.codex-workspace/repo/.nuget/packages
+          DOTNET_CLI_HOME: ${{ github.workspace }}/.codex-workspace/repo/.dotnet-home
+          NPM_CONFIG_CACHE: ${{ github.workspace }}/.codex-workspace/repo/.npm-cache
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          codex-version: '0.138.0'
+          permission-profile: ':workspace'
+          safety-strategy: drop-sudo
+          allow-users: OL1V3S
+          working-directory: .codex-workspace/repo
+          prompt-file: .github/codex/prompts/task.md
+
+      - name: Validate Codex patch boundary and package deterministic artifact
+        env:
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
+        run: |
+          REPO=.codex-workspace/repo
+          test "$(cat "$REPO/.git/HEAD")" = "$BASE_SHA" || {
+            echo 'Codex may not create commits or move HEAD.' >&2
+            exit 1
+          }
+          python3 .github/scripts/codex_bridge.py validate-writes \
+            --packet .codex-task/task-packet.json \
+            --repo "$REPO"
+          git -C "$REPO" diff --no-ext-diff --check HEAD
+          mkdir -p .codex-artifact
+          git -C "$REPO" diff --binary --no-ext-diff HEAD -- . > .codex-artifact/codex.patch
+          while IFS= read -r -d '' path; do
+            (
+              cd "$REPO"
+              git diff --binary --no-ext-diff --no-index -- /dev/null "$path" || test $? -eq 1
+            ) >> "$GITHUB_WORKSPACE/.codex-artifact/codex.patch"
+          done < <(git -C "$REPO" ls-files --others --exclude-standard -z)
+          test -s .codex-artifact/codex.patch
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          Path('.codex-artifact/codex-report.md').write_text(
+              os.environ.get('CODEX_FINAL_MESSAGE', '') + '\n', encoding='utf-8'
+          )
+          PY
+
+      - name: Upload patch for credential-separated publication
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-patch-${{ github.run_id }}
+          path: .codex-artifact
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: [prepare, codex_write]
+    if: needs.codex_write.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout trusted bridge code
+        uses: actions/checkout@v7
+        with:
+          path: .bridge-trusted
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Create short-lived least-privilege publisher token
+        id: app-token
+        uses: actions/create-github-app-token@v3.2.0
+        with:
+          client-id: ${{ vars.CODEX_PUBLISHER_CLIENT_ID }}
+          private-key: ${{ secrets.CODEX_PUBLISHER_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Checkout exact publication base with publisher credential
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: .publish-worktree
+          fetch-depth: 1
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Download validated task packet
+        uses: actions/download-artifact@v4
+        with:
+          name: codex-task-${{ github.run_id }}
+          path: .codex-task
+
+      - name: Download Codex patch
+        uses: actions/download-artifact@v4
+        with:
+          name: codex-patch-${{ github.run_id }}
+          path: .codex-artifact
+
+      - name: Revalidate branch and PR state before publication
+        env:
+          MODE: ${{ needs.prepare.outputs.mode }}
+          BASE_REF: ${{ needs.prepare.outputs.base_ref }}
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          BRANCH: ${{ needs.prepare.outputs.branch }}
+          PR_NUMBER: ${{ needs.prepare.outputs.pr }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          ENCODED_REF="$(python3 - <<'PY'
+          import os, urllib.parse
+          print(urllib.parse.quote(os.environ["BASE_REF"], safe=""))
+          PY
+          )"
+          ACTUAL_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$ENCODED_REF" --jq .object.sha)"
+          test "$ACTUAL_SHA" = "$BASE_SHA" || {
+            echo "Publication base became stale: expected $BASE_SHA, current $ACTUAL_SHA" >&2
+            exit 1
+          }
+          if [ "$MODE" = implement ]; then
+            if git -C .publish-worktree ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null 2>&1; then
+              echo "Implementation branch already exists; refusing ambiguous publication." >&2
+              exit 1
+            fi
+          else
+            PR_STATE="$(gh pr view "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --json state --jq .state)"
+            PR_HEAD="$(gh pr view "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --json headRefName --jq .headRefName)"
+            PR_BASE="$(gh pr view "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)"
+            test "$PR_STATE" = OPEN && test "$PR_HEAD" = "$BRANCH" && test "$PR_BASE" = main || {
+              echo "Fix task does not match an open PR targeting main." >&2
+              exit 1
+            }
+          fi
+
+      - name: Apply and mechanically revalidate Codex patch
+        run: |
+          git -C .publish-worktree apply --index --whitespace=error-all "$GITHUB_WORKSPACE/.codex-artifact/codex.patch"
+          python3 .bridge-trusted/.github/scripts/codex_bridge.py validate-writes \
+            --packet .codex-task/task-packet.json \
+            --repo .publish-worktree
+          git -C .publish-worktree diff --cached --check
+
+      - name: Commit and push as publisher GitHub App
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          BRANCH: ${{ needs.prepare.outputs.branch }}
+          TITLE: ${{ needs.prepare.outputs.title }}
+        run: |
+          BOT_USER_ID="$(GH_TOKEN="$APP_TOKEN" gh api "/users/${APP_SLUG}[bot]" --jq .id)"
+          git -C .publish-worktree config user.name "${APP_SLUG}[bot]"
+          git -C .publish-worktree config user.email "${BOT_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
+          git -C .publish-worktree commit -m "$TITLE"
+          git -C .publish-worktree push origin "HEAD:refs/heads/$BRANCH"
+
+      - name: Build draft PR body
+        if: needs.prepare.outputs.mode == 'implement'
+        env:
+          ISSUE: ${{ needs.prepare.outputs.issue }}
+          RISK: ${{ needs.prepare.outputs.risk }}
+        run: |
+          {
+            echo '## Summary'
+            echo
+            echo "Codex-backed implementation for #$ISSUE."
+            echo
+            echo "Closes #$ISSUE"
+            echo
+            echo '## Risk'
+            echo
+            echo "$RISK"
+            echo
+            echo '## Codex execution report'
+            echo
+            cat .codex-artifact/codex-report.md
+            echo
+            echo '## Verification boundary'
+            echo
+            echo 'Codex worker verification is development evidence only. Existing required Frontend, Backend, PostgreSQL, and Vercel checks remain the independent review-ready proof. Human merge authority is unchanged.'
+          } > .codex-artifact/pr-body.md
+
+      - name: Create or locate draft PR
+        id: pr
+        env:
+          MODE: ${{ needs.prepare.outputs.mode }}
+          PR_NUMBER: ${{ needs.prepare.outputs.pr }}
+          BRANCH: ${{ needs.prepare.outputs.branch }}
+          TITLE: ${{ needs.prepare.outputs.title }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          if [ "$MODE" = implement ]; then
+            PR_URL="$(gh pr create -R "$GITHUB_REPOSITORY" --draft --base main --head "$BRANCH" --title "$TITLE" --body-file .codex-artifact/pr-body.md)"
+          else
+            PR_URL="$(gh pr view "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --json url --jq .url)"
+          fi
+          echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Report publication result to governing issue or PR
+        uses: actions/github-script@v7
+        env:
+          PR_URL: ${{ steps.pr.outputs.url }}
+          MODE: ${{ needs.prepare.outputs.mode }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `Codex ${process.env.MODE} publication complete: ${process.env.PR_URL}\n\nIndependent PR CI must pass before ChatGPT review-ready status.`,
+            });

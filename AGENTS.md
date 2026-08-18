@@ -368,3 +368,72 @@ If implementation requires work outside the authorized issue:
 3. propose the smallest scope adjustment.
 
 Do not silently expand into adjacent roadmap work.
+
+## ChatGPT-to-Codex execution bridge
+
+When `.github/workflows/codex-agent.yml` is configured and available, normal
+repository audits, plans, implementations, and review corrections should use the
+GitHub-native Codex bridge rather than having ChatGPT directly manufacture
+application-code commits through raw repository file writes. Direct ChatGPT
+writes remain appropriate for small GitHub administration and an explicitly
+approved bootstrap/emergency exception.
+
+The human and ChatGPT remain the product/engineering command center: discuss
+product direction, select the task, record the GitHub Issue, resolve ambiguity,
+and provide the approvals required by the risk gates above. Codex owns the
+actual repository engineering execution after that authority is established.
+
+Owner-authored bridge commands are:
+
+- `/codex plan` — read-only engineering plan;
+- `/codex audit` — read-only bounded audit;
+- `/codex implement` — authorized implementation;
+- `/codex fix` — bounded correction on an existing PR branch.
+
+ChatGPT prepares the structured task packet and posts these commands; the human
+should not need to copy prompts into an IDE during the normal workflow.
+
+### Repository Context Pruning
+
+`/codex plan` and `/codex audit` must use pruned context by default. A separate
+trusted preparation step provides Codex only:
+
+- a lightweight tracked-path and symbol map;
+- the exact targeted raw files selected from the approved UX/scope discussion;
+- the allowed canonical authority documents; and
+- the fixed task packet/prompt wrapper.
+
+Codex must not silently fall back to a full-repository raw read. If the supplied
+context cannot resolve a concrete dependency, contract, call path, test
+boundary, security rule, or financial invariant, stop and request the smallest
+specific path/symbol expansion and explain why it is needed.
+
+Implementation and fix runs have a real checkout so they can compile and test,
+but they still start from the structural map, targeted files, and approved plan
+where applicable. Additional reads should be limited to concrete discovered
+dependencies and recorded in the final report. Changed paths are mechanically
+restricted by the task packet.
+
+### Approval, publication, and review separation
+
+For MEDIUM/HIGH implementation, the human approval marker must be bound to the
+exact Codex read-only result and base commit. A changed plan or stale base is not
+a valid approval. LOW work may proceed under the LOW authority above once the
+task is explicitly selected.
+
+Ordinary review corrections on an already approved PR do not require a second
+product-risk approval when they stay within the original issue and bounded
+review finding. Scope-expanding corrections must return to normal planning and
+approval instead of using `/codex fix` as an authority bypass.
+
+Codex execution receives no GitHub publication credential. A separate fresh
+publication job applies the accepted patch, revalidates the allowed paths and
+base/PR state, and creates or updates a draft PR using the dedicated
+least-privilege publisher GitHub App. Codex may never merge, push to `main`, or
+perform a production operation.
+
+Codex's own test results are development evidence only. Existing applicable
+Frontend, Backend, PostgreSQL, Vercel, and Codex bridge policy CI remain the
+independent proof layer. After those checks succeed, ChatGPT reviews the actual
+PR/diff and CI evidence. The human repository owner remains the sole merge
+authority.

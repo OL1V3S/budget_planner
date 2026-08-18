@@ -1,0 +1,56 @@
+name: Codex Bridge CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/codex-agent.yml'
+      - '.github/workflows/codex-bridge-ci.yml'
+      - '.github/codex/**'
+      - '.github/scripts/codex_bridge.py'
+      - '.github/scripts/build_repo_map.py'
+      - '.github/scripts/test_codex_bridge.py'
+      - 'AGENTS.md'
+      - 'docs/verification.md'
+
+permissions:
+  contents: read
+
+jobs:
+  policy-tests:
+    name: Codex bridge policy tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Compile bridge helpers
+        run: >-
+          python3 -m py_compile
+          .github/scripts/codex_bridge.py
+          .github/scripts/build_repo_map.py
+          .github/scripts/test_codex_bridge.py
+
+      - name: Run bridge policy tests
+        run: python3 .github/scripts/test_codex_bridge.py
+
+      - name: Exercise repository map generation
+        run: |
+          python3 .github/scripts/build_repo_map.py --root . --output "$RUNNER_TEMP/repo-map.txt"
+          test -s "$RUNNER_TEMP/repo-map.txt"
+          grep -F 'backend/Program.cs' "$RUNNER_TEMP/repo-map.txt"
+          grep -F 'frontend/src' "$RUNNER_TEMP/repo-map.txt"
+
+      - name: Validate workflow YAML syntax
+        run: >-
+          ruby -e "require 'yaml'; YAML.parse_file('.github/workflows/codex-agent.yml'); YAML.parse_file('.github/workflows/codex-bridge-ci.yml')"
+
+      - name: Check whitespace errors
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git diff --check "$BASE_SHA...$HEAD_SHA"

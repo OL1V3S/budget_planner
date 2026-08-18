@@ -84,12 +84,17 @@ apply production migrations.
 
 Sunflower statement import is a planned future capability, not current
 architecture. Its approved untrusted-document security and privacy boundary is
-defined in [`docs/import-threat-model.md`](docs/import-threat-model.md). Later
-approved F2 roadmap work may add an import boundary that parses untrusted
-statement input, normalizes it into reviewed domain data, and persists accepted
-transactions through the authoritative backend financial write boundary. Its
-pipeline, provenance, idempotency, review workflow, and persistence design
-remain future approved work.
+defined in [`docs/import-threat-model.md`](docs/import-threat-model.md), and its
+approved V1 normalized financial-processing and review pipeline is defined in
+[`docs/import-pipeline.md`](docs/import-pipeline.md).
+
+Future implementation may add an import boundary that parses supported
+untrusted statement input, normalizes it into reviewed bank-neutral rows, and
+persists only explicitly confirmed valid expense candidates through the
+authoritative backend financial write boundary. Parser selection, runtime/API/UI
+implementation, import storage/schema design, and any required migrations remain
+future scoped work. Imported expense persistence remains blocked until the
+applicable approved date-only semantics are implemented and verified.
 
 Likewise, approved target representations such as date-only financial semantics
 remain future roadmap work until their implementation issues are separately

@@ -148,14 +148,30 @@ evidence from the repository's independent proof layer.
 
 For `/codex plan` and `/codex audit`:
 
+- every task packet must include `AGENTS.md` in `authority_docs`;
 - a separate context-preparation job generates a structural repository map and
-  copies only the exact targeted files plus allowed canonical authority docs;
+  copies only exact targeted files plus allowed canonical authority docs;
 - the Codex job receives only that pruned artifact, not a full repository
   checkout;
 - insufficient context must produce a bounded context-expansion request rather
   than an unreported broad read; and
-- a MEDIUM/HIGH implementation approval is bound to the exact read-only result,
-  governing issue, and base commit before write-mode execution may start.
+- a result that still has `context_expansion_requests` or reports
+  `context_expansion_required` is not eligible to authorize implementation.
+
+For MEDIUM/HIGH `/codex implement`, approval is intentionally narrower than a
+plain “approved” flag. The workflow binds together:
+
+- the canonical SHA-256 of the exact trusted Codex plan/audit result;
+- the governing issue;
+- the exact base commit used for that result; and
+- `scope_sha256`, the canonical SHA-256 of the normalized implementation scope:
+  risk, base ref/SHA, intended branch/title, targeted files, authority docs,
+  exact allowed write paths/directory prefixes, and task instructions.
+
+The owner-authored approval marker references both the exact plan digest and the
+exact implementation-scope digest. A changed plan, stale base, broadened write
+set, changed instructions, or otherwise different implementation packet does
+not inherit the old approval.
 
 For `/codex implement` and `/codex fix`:
 
@@ -163,7 +179,10 @@ For `/codex implement` and `/codex fix`:
   development evidence only;
 - Codex receives no publication GitHub App token and its checkout has no
   persisted GitHub credential;
-- exact allowed write paths are mechanically checked before a patch is accepted;
+- allowed write entries are exact files or explicit directory prefixes, never
+  globs;
+- additions, modifications, and deletions are all counted when enforcing the
+  write boundary, and Codex-created/modified symlinks are rejected;
 - the publication job runs separately without `OPENAI_API_KEY`, revalidates the
   base/PR state, applies the patch, runs `git diff --check`, and publishes only
   to the intended feature or existing PR branch; and
@@ -177,7 +196,8 @@ Vercel evidence as any other change. Codex saying that tests passed is never a
 replacement for those independent checks.
 
 The bridge also has its own **Codex bridge policy tests** PR check for task
-packet parsing, approval binding, write-path enforcement, helper compilation,
+packet parsing, trusted-plan/approval binding, implementation-scope binding,
+write-path enforcement, deletion/symlink rejection, helper compilation,
 repository-map generation, and workflow YAML syntax.
 
 One-time repository configuration for the bridge uses these names:

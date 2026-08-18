@@ -102,6 +102,8 @@ def list_of_paths(packet: dict[str, Any], field: str, *, required: bool) -> list
 
 
 def validate_authority_docs(paths: list[str]) -> None:
+    if "AGENTS.md" not in paths:
+        fail("authority_docs must include AGENTS.md")
     for path in paths:
         allowed = path in {"AGENTS.md", "ARCHITECTURE.md", "ROADMAP.md"} or (
             path.startswith("docs/") and path.endswith(".md")
@@ -382,8 +384,8 @@ def git_paths(repo: Path) -> set[str]:
             str(repo),
             "diff",
             "--no-ext-diff",
+            "--no-renames",
             "--name-only",
-            "--diff-filter=ACMRTUXB",
             "HEAD",
         ],
         check=True,

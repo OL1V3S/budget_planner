@@ -15,12 +15,13 @@ The task packet is available at either `task-packet.json` (pruned plan/audit wor
 
 The workspace is intentionally pruned. It contains only:
 
-- the structural repository map;
-- the exact targeted raw files selected by ChatGPT from the approved UX/scope discussion;
-- the allowed canonical authority documents;
-- this fixed prompt and the task packet.
+- `repo-map.txt` — the structural repository map;
+- `targeted/` — the exact targeted raw files selected by ChatGPT from the approved UX/scope discussion, preserving repository-relative paths beneath that directory;
+- `authority/` — the allowed canonical authority documents, including `authority/AGENTS.md` when selected;
+- `task-packet.json` — the bounded task packet;
+- `PROMPT.md` and the output schema.
 
-Do not attempt to locate or reconstruct the full repository. Do not assume missing implementation details. Produce the requested engineering plan/audit using only the supplied context.
+Read the applicable supplied authority documents before planning. Do not attempt to locate or reconstruct the full repository. Do not assume missing implementation details. Produce the requested engineering plan/audit using only the supplied context.
 
 If the supplied context is insufficient to resolve a concrete dependency, contract, call path, test boundary, security rule, or financial invariant, return `context_expansion_required` and request the smallest specific additional repository path/symbol needed, with a concise reason. Do not silently broaden context.
 
@@ -28,7 +29,7 @@ When an output schema is supplied, obey it exactly.
 
 ## Implement / fix mode
 
-Start from the task packet's targeted files, structural map, canonical authority documents, and approved plan (when present). Use the smallest-necessary-context principle:
+The working directory is a real repository checkout. Read root `AGENTS.md` and the task-relevant canonical authority docs supplied by the task packet before editing. Start from the task packet's targeted files, structural map, and approved plan (when present). Use the smallest-necessary-context principle:
 
 - inspect additional repository files only when a concrete dependency discovered during implementation requires them;
 - keep each context expansion narrow and record every expansion and its reason in the final report;

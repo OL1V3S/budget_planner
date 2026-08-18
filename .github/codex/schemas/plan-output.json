@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "summary",
+    "files_considered",
+    "plan",
+    "findings",
+    "risks",
+    "verification",
+    "context_expansion_requests"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["plan", "audit", "context_expansion_required"]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "files_considered": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "plan": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "risks": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "verification": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "context_expansion_requests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "reason"],
+        "properties": {
+          "path": { "type": "string" },
+          "symbol": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  }
+}

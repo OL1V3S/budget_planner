@@ -140,7 +140,7 @@ The applicable independent repository CI remains required in addition to any Cod
 
 This threat model governs the document trust boundary, not transaction meaning. Imported data must still obey [`financial-domain-invariants.md`](financial-domain-invariants.md) before it can be persisted as expenses.
 
-In particular, deposits, income, refunds, credits, transfers, card payments, and other non-expense movements must not be forced into the positive-expense model. Classification, duplicate handling, provenance, preview/confirmation, batch behavior, source-account semantics, and date-only persistence remain separate F2/A5 or later decisions.
+For the current single tracked checking-account scope, supported valid debits may become positive expenses even when they represent credit-card payments, transfers, person-to-person payments, or investment funding. Deposits, income, refunds, credits, and other movements that increase the tracked checking account balance remain outside Expense persistence. Classification, duplicate handling, provenance, preview/confirmation, batch behavior, source-account semantics, and date-only persistence remain separate F2/A5 or later decisions.
 
 ## Re-evaluation triggers
 

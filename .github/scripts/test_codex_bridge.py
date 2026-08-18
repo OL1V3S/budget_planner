@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -106,13 +104,13 @@ class ParseTests(unittest.TestCase):
                 event_issue=99,
             )
 
-    def test_fix_may_be_triggered_on_target_pr(self):
+    def test_fix_may_be_triggered_on_target_pr_without_new_plan_approval(self):
         result = self.run_parse(
             packet(
                 issue=45,
                 pr=99,
                 mode="fix",
-                risk="LOW",
+                risk="HIGH",
                 base_ref="fix/99-review",
                 branch="fix/99-review",
                 title="fix: review finding",
@@ -121,6 +119,7 @@ class ParseTests(unittest.TestCase):
             event_issue=99,
         )
         self.assertEqual(result["pr"], 99)
+        self.assertIsNone(result["plan_comment_id"])
 
     def test_title_rejects_newline_output_injection(self):
         with self.assertRaises(SystemExit):
@@ -136,7 +135,7 @@ class ParseTests(unittest.TestCase):
 
 
 class ApprovalTests(unittest.TestCase):
-    def test_approval_is_bound_to_exact_plan_and_issue(self):
+    def build_approval_fixture(self, root: Path, *, binding_base_sha: str = "a" * 40):
         plan = {
             "status": "plan",
             "summary": "bounded plan",
@@ -159,30 +158,51 @@ class ApprovalTests(unittest.TestCase):
             approval_comment_id=11,
         )
         task.update({"pr": None})
+        binding = {
+            "issue": 45,
+            "mode": "plan",
+            "base_sha": binding_base_sha,
+            "plan_sha256": digest,
+        }
         plan_comment = {
             "issue_url": "https://api.github.com/repos/OL1V3S/budget_planner/issues/45",
             "user": {"login": "github-actions[bot]"},
-            "body": "```codex-plan\n" + json.dumps(plan) + "\n```",
+            "body": (
+                "```codex-plan-binding\n"
+                + json.dumps(binding)
+                + "\n```\n```codex-plan\n"
+                + json.dumps(plan)
+                + "\n```"
+            ),
         }
         approval_comment = {
             "issue_url": "https://api.github.com/repos/OL1V3S/budget_planner/issues/45",
             "user": {"login": "OL1V3S"},
-            "body": "/codex approve\n```codex-approval\n" + json.dumps({"issue": 45, "plan_sha256": digest}) + "\n```",
+            "body": "/codex approve\n```codex-approval\n"
+            + json.dumps({"issue": 45, "plan_sha256": digest})
+            + "\n```",
         }
+        for name, value in (
+            ("packet.json", task),
+            ("plan.json", plan_comment),
+            ("approval.json", approval_comment),
+        ):
+            (root / name).write_text(json.dumps(value), encoding="utf-8")
+        return plan, approval_comment
 
+    def make_args(self, root: Path):
+        args = Args()
+        args.packet = str(root / "packet.json")
+        args.plan_comment = str(root / "plan.json")
+        args.approval_comment = str(root / "approval.json")
+        args.output_plan = str(root / "approved.json")
+        return args
+
+    def test_approval_is_bound_to_exact_plan_issue_and_base(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for name, value in (
-                ("packet.json", task),
-                ("plan.json", plan_comment),
-                ("approval.json", approval_comment),
-            ):
-                (root / name).write_text(json.dumps(value), encoding="utf-8")
-            args = Args()
-            args.packet = str(root / "packet.json")
-            args.plan_comment = str(root / "plan.json")
-            args.approval_comment = str(root / "approval.json")
-            args.output_plan = str(root / "approved.json")
+            plan, approval_comment = self.build_approval_fixture(root)
+            args = self.make_args(root)
             bridge.verify_approval(args)
             self.assertEqual(json.loads((root / "approved.json").read_text()), plan)
 
@@ -190,6 +210,13 @@ class ApprovalTests(unittest.TestCase):
             (root / "approval.json").write_text(json.dumps(approval_comment), encoding="utf-8")
             with self.assertRaises(SystemExit):
                 bridge.verify_approval(args)
+
+    def test_stale_plan_base_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.build_approval_fixture(root, binding_base_sha="b" * 40)
+            with self.assertRaises(SystemExit):
+                bridge.verify_approval(self.make_args(root))
 
 
 class WriteBoundaryTests(unittest.TestCase):

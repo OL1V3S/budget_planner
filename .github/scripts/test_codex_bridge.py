@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -100,6 +101,22 @@ class ParseTests(unittest.TestCase):
                 )
             )
 
+    def test_medium_implement_rejects_incorrect_scope_digest(self):
+        with self.assertRaises(SystemExit):
+            self.run_parse(
+                packet(
+                    mode="implement",
+                    risk="MEDIUM",
+                    branch="feat/45-smoke",
+                    title="test: harmless smoke",
+                    allowed_write_paths=["docs/smoke.md"],
+                    plan_sha256="b" * 64,
+                    plan_comment_id=10,
+                    approval_comment_id=11,
+                    scope_sha256="c" * 64,
+                )
+            )
+
     def test_fix_must_bind_to_existing_branch_ref(self):
         with self.assertRaises(SystemExit):
             self.run_parse(
@@ -153,6 +170,7 @@ class ApprovalTests(unittest.TestCase):
         *,
         binding_base_sha: str = "a" * 40,
         plan_author: str = "github-actions[bot]",
+        approval_scope_override: str | None = None,
     ):
         plan = {
             "status": "plan",
@@ -176,6 +194,7 @@ class ApprovalTests(unittest.TestCase):
             approval_comment_id=11,
         )
         task.update({"pr": None})
+        task["scope_sha256"] = bridge.canonical_digest(bridge.implementation_scope(task))
         binding = {
             "issue": 45,
             "mode": "plan",
@@ -193,11 +212,18 @@ class ApprovalTests(unittest.TestCase):
                 + "\n```"
             ),
         }
+        approval_scope = approval_scope_override or task["scope_sha256"]
         approval_comment = {
             "issue_url": "https://api.github.com/repos/OL1V3S/budget_planner/issues/45",
             "user": {"login": "OL1V3S"},
             "body": "/codex approve\n```codex-approval\n"
-            + json.dumps({"issue": 45, "plan_sha256": digest})
+            + json.dumps(
+                {
+                    "issue": 45,
+                    "plan_sha256": digest,
+                    "scope_sha256": approval_scope,
+                }
+            )
             + "\n```",
         }
         for name, value in (
@@ -216,7 +242,7 @@ class ApprovalTests(unittest.TestCase):
         args.output_plan = str(root / "approved.json")
         return args
 
-    def test_approval_is_bound_to_exact_plan_issue_and_base(self):
+    def test_approval_is_bound_to_exact_plan_issue_base_and_scope(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             plan, approval_comment = self.build_approval_fixture(root)
@@ -243,50 +269,58 @@ class ApprovalTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 bridge.verify_approval(self.make_args(root))
 
+    def test_approval_cannot_be_reused_for_different_implementation_scope(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.build_approval_fixture(root, approval_scope_override="d" * 64)
+            with self.assertRaises(SystemExit):
+                bridge.verify_approval(self.make_args(root))
+
 
 class WriteBoundaryTests(unittest.TestCase):
+    def initialize_repo(self, repo: Path):
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+        (repo / "seed.txt").write_text("seed\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-qm", "base"], cwd=repo, check=True)
+
+    def validate(self, repo: Path, allowed_write_paths):
+        task = packet(allowed_write_paths=allowed_write_paths)
+        task_path = repo.parent / "task.json"
+        task_path.write_text(json.dumps(task), encoding="utf-8")
+        args = Args()
+        args.packet = str(task_path)
+        args.repo = str(repo)
+        bridge.validate_writes(args)
+
     def test_out_of_scope_change_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"
-            repo.mkdir()
-            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
-            (repo / "allowed.txt").write_text("before\n", encoding="utf-8")
-            (repo / "blocked.txt").write_text("before\n", encoding="utf-8")
-            subprocess.run(["git", "add", "."], cwd=repo, check=True)
-            subprocess.run(["git", "commit", "-qm", "base"], cwd=repo, check=True)
+            self.initialize_repo(repo)
             (repo / "blocked.txt").write_text("after\n", encoding="utf-8")
-
-            task = packet(allowed_write_paths=["allowed.txt"])
-            task_path = Path(tmp) / "task.json"
-            task_path.write_text(json.dumps(task), encoding="utf-8")
-            args = Args()
-            args.packet = str(task_path)
-            args.repo = str(repo)
             with self.assertRaises(SystemExit):
-                bridge.validate_writes(args)
+                self.validate(repo, ["allowed.txt"])
 
     def test_allowed_prefix_accepts_new_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"
-            repo.mkdir()
-            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
-            subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
-            (repo / "seed.txt").write_text("seed\n", encoding="utf-8")
-            subprocess.run(["git", "add", "."], cwd=repo, check=True)
-            subprocess.run(["git", "commit", "-qm", "base"], cwd=repo, check=True)
+            self.initialize_repo(repo)
             (repo / "docs").mkdir()
             (repo / "docs" / "new.md").write_text("new\n", encoding="utf-8")
+            self.validate(repo, ["docs/"])
 
-            task = packet(allowed_write_paths=["docs/"])
-            task_path = Path(tmp) / "task.json"
-            task_path.write_text(json.dumps(task), encoding="utf-8")
-            args = Args()
-            args.packet = str(task_path)
-            args.repo = str(repo)
-            bridge.validate_writes(args)
+    def test_symlink_change_fails_closed(self):
+        if not hasattr(os, "symlink"):
+            self.skipTest("symlinks unavailable")
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            self.initialize_repo(repo)
+            os.symlink("seed.txt", repo / "link.txt")
+            with self.assertRaises(SystemExit):
+                self.validate(repo, ["link.txt"])
 
 
 if __name__ == "__main__":

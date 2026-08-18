@@ -12,15 +12,27 @@ not imply that the current API, schema, or stored data already conforms.
 
 ## Expense invariant
 
-An expense is an authenticated user's spending outflow. Its amount:
+For the current product scope, an expense is an authenticated user's debit or
+outflow from the tracked checking account. Its amount:
 
 - must be strictly greater than zero;
 - must have at most two decimal places; and
 - may use the existing application and database representable monetary range.
 
-There is no additional product-specific monetary ceiling. Income, refunds,
-credits, transfers, and other non-expense cash movements are not negative
-expenses and must not be persisted as expenses merely by changing their sign.
+There is no additional product-specific monetary ceiling. Economic meaning in
+another account does not exclude a valid tracked-account debit: ordinary
+purchases, subscriptions, bills, credit-card or loan payments, person-to-person
+payments, transfers, bank fees, and brokerage or investment-funding debits may
+all be represented as positive expenses when they reduce the tracked checking
+account balance.
+
+Deposits, refunds, credits, income, and other movements that increase the
+tracked checking account balance are not negative expenses and must not be
+persisted as expenses merely by changing their sign.
+
+If Budget Planner later tracks multiple accounts, this invariant must be
+revisited before cross-account transfers are represented so the product does
+not accidentally double-count the same movement across tracked accounts.
 
 ## Description invariant
 
@@ -162,8 +174,9 @@ or semantic cleanup requires separate human approval.
 Before imported transactions can safely persist as expenses, the applicable
 implementation must provide:
 
-- the positive expense model;
-- classification or exclusion of non-expense movements;
+- the positive tracked-account outflow model;
+- reliable debit/credit direction so supported debits are eligible and credits
+  or deposits remain excluded;
 - monetary precision enforcement;
 - date-only semantics;
 - description requirements;
@@ -176,8 +189,7 @@ implementation must provide:
 
 The following remain for F1, F2, or later approved product work:
 
-- transfer and card-payment detection;
-- refund and reversal relationships;
+- refund and reversal relationships beyond current direction-based treatment;
 - an income model;
 - merchant extraction;
 - provenance and raw descriptions;
@@ -186,7 +198,7 @@ The following remain for F1, F2, or later approved product work:
 - preview and review workflows;
 - statement reconciliation;
 - batch atomicity; and
-- source-account semantics.
+- source-account semantics beyond the current single tracked checking account.
 
 ## Implementation destinations
 

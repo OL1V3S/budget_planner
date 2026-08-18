@@ -96,8 +96,15 @@ status.
 
 ## Restricted workstation fallback
 
-At the beginning of work, determine whether Git, npm/Node.js, the .NET SDK, and
-local PostgreSQL are available when relevant.
+At the beginning of work, distinguish three capability groups:
+
+- **Implementation capability** — safely inspect the branch and worktree, edit,
+  review the diff, and create a local commit.
+- **Publication capability** — push the branch and create a draft pull request.
+- **Executable verification capability** — run npm/Node.js, the .NET SDK, and a
+  disposable local PostgreSQL database when relevant.
+
+Missing one capability does not prove that another is missing.
 
 - If npm is unavailable, report frontend verification as **Not run locally —
   capability unavailable** and require Frontend CI when relevant.
@@ -108,6 +115,27 @@ local PostgreSQL are available when relevant.
 - If Git CLI is unavailable, do not claim local branch, worktree, diff, or
   `git diff --check` evidence. Use GitHub Desktop or connected GitHub evidence
   where it can establish the fact, and disclose anything still unverified.
+- If `gh` is unavailable but safe local Git operations work, implementation may
+  continue after the applicable risk approval. Missing `gh` alone is not an
+  implementation blocker.
+- If push authentication or draft-PR tooling is unavailable, create a clean
+  local commit when authorized and report **publication handoff required**.
+  Include the branch, commit SHA, changed files, verification evidence and
+  gaps, and the remaining human steps. GitHub Desktop may publish the branch;
+  GitHub Desktop or the GitHub web interface may then open the draft PR.
+
+The supported split workflow is:
+
+```text
+agent implementation + clean local commit
+-> human GitHub Desktop/web publication
+-> required CI evidence
+-> independent review
+-> human merge
+```
+
+A local commit is durable implementation evidence. It is not evidence that the
+branch was pushed, a PR exists, or CI ran. Never fabricate those states.
 
 A draft PR may be published with disclosed local gaps when `AGENTS.md` permits
 it. Missing local tools do not weaken the verification requirement and must

@@ -321,6 +321,10 @@ def verify_approval(args: argparse.Namespace) -> None:
         fail("plan binding digest does not match plan content")
     if binding.get("mode") not in {"plan", "audit"}:
         fail("plan binding mode is not a read-only planning/audit result")
+    if plan.get("status") != binding.get("mode"):
+        fail("read-only result status does not match the bound plan/audit mode")
+    if plan.get("context_expansion_requests"):
+        fail("implementation cannot proceed while the approved plan still requests more context")
 
     approval_author = ((approval_comment.get("user") or {}).get("login") or "")
     if approval_author != OWNER:

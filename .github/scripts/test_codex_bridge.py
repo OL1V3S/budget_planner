@@ -76,6 +76,18 @@ class ParseTests(unittest.TestCase):
                 )
             )
 
+    def test_allowed_write_paths_reject_globs(self):
+        with self.assertRaises(SystemExit):
+            self.run_parse(
+                packet(
+                    mode="implement",
+                    risk="LOW",
+                    branch="feat/45-smoke",
+                    title="test: harmless smoke",
+                    allowed_write_paths=["docs/*.md"],
+                )
+            )
+
     def test_medium_implement_requires_plan_binding(self):
         with self.assertRaises(SystemExit):
             self.run_parse(
@@ -135,7 +147,13 @@ class ParseTests(unittest.TestCase):
 
 
 class ApprovalTests(unittest.TestCase):
-    def build_approval_fixture(self, root: Path, *, binding_base_sha: str = "a" * 40):
+    def build_approval_fixture(
+        self,
+        root: Path,
+        *,
+        binding_base_sha: str = "a" * 40,
+        plan_author: str = "github-actions[bot]",
+    ):
         plan = {
             "status": "plan",
             "summary": "bounded plan",
@@ -166,7 +184,7 @@ class ApprovalTests(unittest.TestCase):
         }
         plan_comment = {
             "issue_url": "https://api.github.com/repos/OL1V3S/budget_planner/issues/45",
-            "user": {"login": "github-actions[bot]"},
+            "user": {"login": plan_author},
             "body": (
                 "```codex-plan-binding\n"
                 + json.dumps(binding)
@@ -215,6 +233,13 @@ class ApprovalTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self.build_approval_fixture(root, binding_base_sha="b" * 40)
+            with self.assertRaises(SystemExit):
+                bridge.verify_approval(self.make_args(root))
+
+    def test_owner_cannot_substitute_for_codex_plan_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.build_approval_fixture(root, plan_author="OL1V3S")
             with self.assertRaises(SystemExit):
                 bridge.verify_approval(self.make_args(root))
 

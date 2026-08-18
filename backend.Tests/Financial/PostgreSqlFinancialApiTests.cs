@@ -32,7 +32,26 @@ public sealed class PostgreSqlFinancialApiTests
     }
 
     [PostgreSqlFact]
-    public async Task Expense_crud_persists_current_values_and_enforces_user_isolation()
+    public async Task Expense_overprecision_is_rejected_before_postgresql_can_round_it()
+    {
+        await using var app = new PostgreSqlFinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("expense-precision@example.com");
+
+        var response = await owner.Client.PostAsJsonAsync("/api/expenses", new
+        {
+            description = "postgres precision",
+            amount = 123.456m,
+            date = "2026-08-15T12:30:00",
+            category = "food"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var read = await owner.Client.GetFromJsonAsync<JsonElement>("/api/expenses");
+        Assert.Empty(read.EnumerateArray());
+    }
+
+    [PostgreSqlFact]
+    public async Task Expense_crud_persists_valid_values_and_enforces_user_isolation()
     {
         await using var app = new PostgreSqlFinancialApiTestApplication();
         using var owner = await app.CreateAuthenticatedUserAsync("expense-owner@example.com");
@@ -40,21 +59,25 @@ public sealed class PostgreSqlFinancialApiTests
 
         var createResponse = await owner.Client.PostAsJsonAsync("/api/expenses", new
         {
-            description = "postgres expense",
-            amount = 123.456m,
+            description = " postgres expense ",
+            amount = 123.45m,
             date = "2026-08-15T12:30:00",
-            category = "Food"
+            category = " Food "
         });
         var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
-        Assert.Equal(123.456m, created.GetProperty("amount").GetDecimal());
+        Assert.Equal(123.45m, created.GetProperty("amount").GetDecimal());
+        Assert.Equal("postgres expense", created.GetProperty("description").GetString());
+        Assert.Equal("food", created.GetProperty("category").GetString());
+        Assert.False(created.TryGetProperty("userId", out _));
+        Assert.False(created.TryGetProperty("user", out _));
         var id = created.GetProperty("id").GetInt32();
 
         var read = await owner.Client.GetFromJsonAsync<JsonElement>("/api/expenses");
         var readExpense = Assert.Single(read.EnumerateArray());
         Assert.Equal(id, readExpense.GetProperty("id").GetInt32());
-        Assert.Equal(123.46m, readExpense.GetProperty("amount").GetDecimal());
+        Assert.Equal(123.45m, readExpense.GetProperty("amount").GetDecimal());
 
         var forbiddenUpdate = await other.Client.PutAsJsonAsync($"/api/expenses/{id}", new
         {
@@ -69,18 +92,19 @@ public sealed class PostgreSqlFinancialApiTests
         var updateResponse = await owner.Client.PutAsJsonAsync($"/api/expenses/{id}", new
         {
             id,
-            description = "updated postgres expense",
-            amount = -4.50m,
+            description = " updated postgres expense ",
+            amount = 4.50m,
             date = "2026-09-03T09:45:00",
-            category = " FOOD "
+            category = " FOOD   MARKET "
         });
         Assert.Equal(HttpStatusCode.NoContent, updateResponse.StatusCode);
 
         var persisted = await app.FindExpenseAsync(id);
         Assert.NotNull(persisted);
-        Assert.Equal(-4.50m, persisted.Amount);
+        Assert.Equal(4.50m, persisted.Amount);
+        Assert.Equal("updated postgres expense", persisted.Description);
+        Assert.Equal("food market", persisted.Category);
         Assert.Equal(new DateTime(2026, 9, 3, 9, 45, 0, DateTimeKind.Utc), persisted.Date);
-        Assert.Equal(" FOOD ", persisted.Category);
 
         var deleteResponse = await owner.Client.DeleteAsync($"/api/expenses/{id}");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);

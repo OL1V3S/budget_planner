@@ -254,10 +254,17 @@ jobs:
     outputs:
       final_message: ${{ steps.run_codex.outputs.final-message }}
     steps:
-      - name: Checkout exact trusted base without credentials
+      - name: Checkout trusted bridge code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Checkout exact task base as data
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.base_sha }}
+          path: .codex-source
           persist-credentials: false
           fetch-depth: 1
 
@@ -267,18 +274,35 @@ jobs:
           name: codex-task-${{ github.run_id }}
           path: .codex-task
 
-      - name: Generate structural map and isolated local clone
+      - name: Build isolated Codex workspace from task base
         env:
           BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
         run: |
-          python3 .github/scripts/build_repo_map.py --root . --output "$RUNNER_TEMP/repo-map.txt"
+          python3 .github/scripts/build_repo_map.py --root .codex-source --output "$RUNNER_TEMP/repo-map.txt"
           mkdir -p .codex-workspace
-          git clone --no-hardlinks --no-checkout "$GITHUB_WORKSPACE" .codex-workspace/repo
+          git clone --no-hardlinks --no-checkout "$GITHUB_WORKSPACE/.codex-source" .codex-workspace/repo
           git -C .codex-workspace/repo checkout --detach "$BASE_SHA"
-          mkdir -p .codex-workspace/repo/.codex
+          mkdir -p .codex-workspace/repo/.codex/authority
           cp .codex-task/task-packet.json .codex-workspace/repo/.codex/task-packet.json
           cp .codex-task/approved-plan.json .codex-workspace/repo/.codex/approved-plan.json
           cp "$RUNNER_TEMP/repo-map.txt" .codex-workspace/repo/.codex/repo-map.txt
+          python3 - <<'PY'
+          import json
+          import shutil
+          from pathlib import Path
+
+          root = Path.cwd()
+          packet = json.loads((root / ".codex-task/task-packet.json").read_text(encoding="utf-8"))
+          destination_root = root / ".codex-workspace/repo/.codex/authority"
+          for raw in packet["authority_docs"]:
+              source = (root / raw).resolve()
+              source.relative_to(root)
+              if not source.is_file():
+                  raise SystemExit(f"trusted authority document missing from main: {raw}")
+              destination = destination_root / raw
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(source, destination)
+          PY
           cat >> .codex-workspace/repo/.git/info/exclude <<'EOF'
           /.codex/
           /.nuget/
@@ -331,7 +355,7 @@ jobs:
           safety-strategy: drop-sudo
           allow-users: OL1V3S
           working-directory: .codex-workspace/repo
-          prompt-file: .codex-workspace/repo/.github/codex/prompts/task.md
+          prompt-file: .github/codex/prompts/task.md
 
       - name: Validate Codex patch boundary and package deterministic artifact
         env:
@@ -381,6 +405,13 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+      - name: Checkout trusted bridge code
+        uses: actions/checkout@v7
+        with:
+          path: .bridge-trusted
+          persist-credentials: false
+          fetch-depth: 1
+
       - name: Create short-lived least-privilege publisher token
         id: app-token
         uses: actions/create-github-app-token@v3.2.0
@@ -394,6 +425,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.base_sha }}
+          path: .publish-worktree
           fetch-depth: 1
           token: ${{ steps.app-token.outputs.token }}
 
@@ -429,14 +461,14 @@ jobs:
             exit 1
           }
           if [ "$MODE" = implement ]; then
-            if git ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null 2>&1; then
+            if git -C .publish-worktree ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null 2>&1; then
               echo "Implementation branch already exists; refusing ambiguous publication." >&2
               exit 1
             fi
           else
-            PR_STATE="$(gh pr view "$PR_NUMBER" --json state --jq .state)"
-            PR_HEAD="$(gh pr view "$PR_NUMBER" --json headRefName --jq .headRefName)"
-            PR_BASE="$(gh pr view "$PR_NUMBER" --json baseRefName --jq .baseRefName)"
+            PR_STATE="$(gh pr view "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --json state --jq .state)"
+            PR_HEAD="$(gh pr view "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --json headRefName --jq .headRefName)"
+            PR_BASE="$(gh pr view "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)"
             test "$PR_STATE" = OPEN && test "$PR_HEAD" = "$BRANCH" && test "$PR_BASE" = main || {
               echo "Fix task does not match an open PR targeting main." >&2
               exit 1
@@ -445,11 +477,11 @@ jobs:
 
       - name: Apply and mechanically revalidate Codex patch
         run: |
-          git apply --index --whitespace=error-all .codex-artifact/codex.patch
-          python3 .github/scripts/codex_bridge.py validate-writes \
+          git -C .publish-worktree apply --index --whitespace=error-all "$GITHUB_WORKSPACE/.codex-artifact/codex.patch"
+          python3 .bridge-trusted/.github/scripts/codex_bridge.py validate-writes \
             --packet .codex-task/task-packet.json \
-            --repo .
-          git diff --cached --check
+            --repo .publish-worktree
+          git -C .publish-worktree diff --cached --check
 
       - name: Commit and push as publisher GitHub App
         env:
@@ -459,10 +491,10 @@ jobs:
           TITLE: ${{ needs.prepare.outputs.title }}
         run: |
           BOT_USER_ID="$(GH_TOKEN="$APP_TOKEN" gh api "/users/${APP_SLUG}[bot]" --jq .id)"
-          git config user.name "${APP_SLUG}[bot]"
-          git config user.email "${BOT_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
-          git commit -m "$TITLE"
-          git push origin "HEAD:refs/heads/$BRANCH"
+          git -C .publish-worktree config user.name "${APP_SLUG}[bot]"
+          git -C .publish-worktree config user.email "${BOT_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
+          git -C .publish-worktree commit -m "$TITLE"
+          git -C .publish-worktree push origin "HEAD:refs/heads/$BRANCH"
 
       - name: Build draft PR body
         if: needs.prepare.outputs.mode == 'implement'
@@ -500,9 +532,9 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           if [ "$MODE" = implement ]; then
-            PR_URL="$(gh pr create --draft --base main --head "$BRANCH" --title "$TITLE" --body-file .codex-artifact/pr-body.md)"
+            PR_URL="$(gh pr create -R "$GITHUB_REPOSITORY" --draft --base main --head "$BRANCH" --title "$TITLE" --body-file .codex-artifact/pr-body.md)"
           else
-            PR_URL="$(gh pr view "$PR_NUMBER" --json url --jq .url)"
+            PR_URL="$(gh pr view "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --json url --jq .url)"
           fi
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
 

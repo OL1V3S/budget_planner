@@ -50,6 +50,23 @@ def canonical_digest(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
 
+def implementation_scope(packet: dict[str, Any]) -> dict[str, Any]:
+    """Fields that a MEDIUM/HIGH human approval authorizes exactly."""
+    return {
+        "issue": packet["issue"],
+        "mode": packet["mode"],
+        "risk": packet["risk"],
+        "base_ref": packet["base_ref"],
+        "base_sha": packet["base_sha"],
+        "branch": packet["branch"],
+        "title": packet["title"],
+        "target_files": packet["target_files"],
+        "authority_docs": packet["authority_docs"],
+        "allowed_write_paths": packet["allowed_write_paths"],
+        "instructions": packet["instructions"],
+    }
+
+
 def safe_repo_path(value: str, *, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         fail(f"{field} must contain non-empty repository-relative paths")
@@ -207,14 +224,7 @@ def parse_task_comment(args: argparse.Namespace) -> None:
     plan_sha256 = packet.get("plan_sha256", "")
     plan_comment_id = packet.get("plan_comment_id")
     approval_comment_id = packet.get("approval_comment_id")
-
-    if requires_approval:
-        if not isinstance(plan_sha256, str) or not SHA256_RE.fullmatch(plan_sha256):
-            fail("MEDIUM/HIGH implementation requires plan_sha256")
-        if not isinstance(plan_comment_id, int) or plan_comment_id <= 0:
-            fail("MEDIUM/HIGH implementation requires plan_comment_id")
-        if not isinstance(approval_comment_id, int) or approval_comment_id <= 0:
-            fail("MEDIUM/HIGH implementation requires approval_comment_id")
+    supplied_scope_sha256 = packet.get("scope_sha256", "")
 
     normalized = {
         "issue": issue,
@@ -232,7 +242,22 @@ def parse_task_comment(args: argparse.Namespace) -> None:
         "plan_sha256": plan_sha256,
         "plan_comment_id": plan_comment_id,
         "approval_comment_id": approval_comment_id,
+        "scope_sha256": supplied_scope_sha256,
     }
+
+    if requires_approval:
+        if not isinstance(plan_sha256, str) or not SHA256_RE.fullmatch(plan_sha256):
+            fail("MEDIUM/HIGH implementation requires plan_sha256")
+        if not isinstance(plan_comment_id, int) or plan_comment_id <= 0:
+            fail("MEDIUM/HIGH implementation requires plan_comment_id")
+        if not isinstance(approval_comment_id, int) or approval_comment_id <= 0:
+            fail("MEDIUM/HIGH implementation requires approval_comment_id")
+        if not isinstance(supplied_scope_sha256, str) or not SHA256_RE.fullmatch(supplied_scope_sha256):
+            fail("MEDIUM/HIGH implementation requires scope_sha256")
+        calculated_scope_sha256 = canonical_digest(implementation_scope(normalized))
+        if supplied_scope_sha256 != calculated_scope_sha256:
+            fail("scope_sha256 does not match the normalized implementation scope")
+
     write_json(args.output, normalized)
 
     all_paths = target_files + allowed_write_paths
@@ -248,6 +273,7 @@ def parse_task_comment(args: argparse.Namespace) -> None:
     emit_output("plan_comment_id", plan_comment_id or "")
     emit_output("approval_comment_id", approval_comment_id or "")
     emit_output("plan_sha256", plan_sha256)
+    emit_output("scope_sha256", supplied_scope_sha256)
     emit_output("needs_frontend", any(path.startswith("frontend/") for path in all_paths))
     emit_output("needs_backend", any(path.startswith("backend") for path in all_paths))
 
@@ -308,6 +334,12 @@ def verify_approval(args: argparse.Namespace) -> None:
         fail("approval marker issue does not match")
     if approval.get("plan_sha256") != digest:
         fail("approval marker is not bound to the exact approved plan")
+    if approval.get("scope_sha256") != packet.get("scope_sha256"):
+        fail("approval marker is not bound to the exact implementation scope")
+
+    calculated_scope_sha256 = canonical_digest(implementation_scope(packet))
+    if calculated_scope_sha256 != packet.get("scope_sha256"):
+        fail("validated task scope digest no longer matches the implementation packet")
 
     write_json(args.output_plan, plan)
 
@@ -380,6 +412,9 @@ def validate_writes(args: argparse.Namespace) -> None:
     if violations:
         fail("Codex changed paths outside allowed_write_paths: " + ", ".join(violations))
     for path in changed:
+        full_path = repo / path
+        if full_path.is_symlink():
+            fail(f"Codex-created/modified symlink is not permitted: {path}")
         print(path)
 
 

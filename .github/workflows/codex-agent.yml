@@ -42,7 +42,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Capture command comment without shell interpolation
         env:
@@ -51,7 +51,7 @@ jobs:
           python3 - <<'PY'
           import os
           from pathlib import Path
-          Path("$RUNNER_TEMP/codex-comment.md").write_text(
+          Path(os.environ["RUNNER_TEMP"], "codex-comment.md").write_text(
               os.environ["CODEX_COMMENT_BODY"], encoding="utf-8"
           )
           PY
@@ -66,13 +66,18 @@ jobs:
           --event-issue "$EVENT_ISSUE"
           --output "$RUNNER_TEMP/task-packet.json"
 
-      - name: Verify exact base ref is still current
+      - name: Verify exact base branch is still current
         env:
+          GH_TOKEN: ${{ github.token }}
           BASE_REF: ${{ steps.parse.outputs.base_ref }}
           BASE_SHA: ${{ steps.parse.outputs.base_sha }}
         run: |
-          git fetch --no-tags origin "$BASE_REF"
-          ACTUAL_SHA="$(git rev-parse FETCH_HEAD)"
+          ENCODED_REF="$(python3 - <<'PY'
+          import os, urllib.parse
+          print(urllib.parse.quote(os.environ["BASE_REF"], safe=""))
+          PY
+          )"
+          ACTUAL_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$ENCODED_REF" --jq .object.sha)"
           test "$ACTUAL_SHA" = "$BASE_SHA" || {
             echo "Task base is stale: expected $BASE_SHA, current $ACTUAL_SHA" >&2
             exit 1
@@ -207,13 +212,25 @@ jobs:
           CODEX_FINAL_MESSAGE: ${{ needs.codex_readonly.outputs.final_message }}
           PLAN_SHA256: ${{ needs.codex_readonly.outputs.plan_sha256 }}
           MODE: ${{ needs.prepare.outputs.mode }}
+          ISSUE: ${{ needs.prepare.outputs.issue }}
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
         with:
           github-token: ${{ github.token }}
           script: |
+            const binding = JSON.stringify({
+              issue: Number(process.env.ISSUE),
+              mode: process.env.MODE,
+              base_sha: process.env.BASE_SHA,
+              plan_sha256: process.env.PLAN_SHA256,
+            });
             const body = [
               `## Codex ${process.env.MODE} result`,
               '',
               `Plan/result SHA-256: \`${process.env.PLAN_SHA256}\``,
+              '',
+              '```codex-plan-binding',
+              binding,
+              '```',
               '',
               '```codex-plan',
               process.env.CODEX_FINAL_MESSAGE,
@@ -224,7 +241,7 @@ jobs:
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              issue_number: Number(process.env.ISSUE),
               body,
             });
 
@@ -242,7 +259,7 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.base_sha }}
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Download validated task and approved plan
         uses: actions/download-artifact@v4
@@ -295,6 +312,11 @@ jobs:
           DOTNET_CLI_HOME: ${{ github.workspace }}/.codex-workspace/repo/.dotnet-home
         run: dotnet restore .codex-workspace/repo/backend.Tests/backend.Tests.csproj
 
+      - name: Lock Git metadata before dropping sudo
+        run: |
+          sudo chown -R root:root .codex-workspace/repo/.git
+          sudo chmod -R a-w .codex-workspace/repo/.git
+
       - name: Run Codex implementation/fix in isolated workspace
         id: run_codex
         uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1.11
@@ -317,19 +339,22 @@ jobs:
           CODEX_FINAL_MESSAGE: ${{ steps.run_codex.outputs.final-message }}
         run: |
           REPO=.codex-workspace/repo
-          test "$(git -C "$REPO" rev-parse HEAD)" = "$BASE_SHA" || {
+          test "$(cat "$REPO/.git/HEAD")" = "$BASE_SHA" || {
             echo 'Codex may not create commits or move HEAD.' >&2
             exit 1
           }
-          while IFS= read -r -d '' path; do
-            git -C "$REPO" add -N -- "$path"
-          done < <(git -C "$REPO" ls-files --others --exclude-standard -z)
           python3 .github/scripts/codex_bridge.py validate-writes \
             --packet .codex-task/task-packet.json \
             --repo "$REPO"
-          git -C "$REPO" diff --check HEAD
+          git -C "$REPO" diff --no-ext-diff --check HEAD
           mkdir -p .codex-artifact
           git -C "$REPO" diff --binary --no-ext-diff HEAD -- . > .codex-artifact/codex.patch
+          while IFS= read -r -d '' path; do
+            (
+              cd "$REPO"
+              git diff --binary --no-ext-diff --no-index -- /dev/null "$path" || test $? -eq 1
+            ) >> "$GITHUB_WORKSPACE/.codex-artifact/codex.patch"
+          done < <(git -C "$REPO" ls-files --others --exclude-standard -z)
           test -s .codex-artifact/codex.patch
           python3 - <<'PY'
           import os
@@ -358,7 +383,7 @@ jobs:
     steps:
       - name: Create short-lived least-privilege publisher token
         id: app-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@v3.2.0
         with:
           client-id: ${{ vars.CODEX_PUBLISHER_CLIENT_ID }}
           private-key: ${{ secrets.CODEX_PUBLISHER_PRIVATE_KEY }}
@@ -369,7 +394,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.base_sha }}
-          fetch-depth: 0
+          fetch-depth: 1
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Download validated task packet
@@ -384,7 +409,7 @@ jobs:
           name: codex-patch-${{ github.run_id }}
           path: .codex-artifact
 
-      - name: Revalidate base/branch state before publication
+      - name: Revalidate branch and PR state before publication
         env:
           MODE: ${{ needs.prepare.outputs.mode }}
           BASE_REF: ${{ needs.prepare.outputs.base_ref }}
@@ -393,8 +418,12 @@ jobs:
           PR_NUMBER: ${{ needs.prepare.outputs.pr }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          git fetch --no-tags origin "$BASE_REF"
-          ACTUAL_SHA="$(git rev-parse FETCH_HEAD)"
+          ENCODED_REF="$(python3 - <<'PY'
+          import os, urllib.parse
+          print(urllib.parse.quote(os.environ["BASE_REF"], safe=""))
+          PY
+          )"
+          ACTUAL_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$ENCODED_REF" --jq .object.sha)"
           test "$ACTUAL_SHA" = "$BASE_SHA" || {
             echo "Publication base became stale: expected $BASE_SHA, current $ACTUAL_SHA" >&2
             exit 1
@@ -405,14 +434,11 @@ jobs:
               exit 1
             fi
           else
-            git ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null 2>&1 || {
-              echo "Fix branch does not exist." >&2
-              exit 1
-            }
             PR_STATE="$(gh pr view "$PR_NUMBER" --json state --jq .state)"
             PR_HEAD="$(gh pr view "$PR_NUMBER" --json headRefName --jq .headRefName)"
-            test "$PR_STATE" = OPEN && test "$PR_HEAD" = "$BRANCH" || {
-              echo "Fix task does not match an open PR head branch." >&2
+            PR_BASE="$(gh pr view "$PR_NUMBER" --json baseRefName --jq .baseRefName)"
+            test "$PR_STATE" = OPEN && test "$PR_HEAD" = "$BRANCH" && test "$PR_BASE" = main || {
+              echo "Fix task does not match an open PR targeting main." >&2
               exit 1
             }
           fi
@@ -438,49 +464,49 @@ jobs:
           git commit -m "$TITLE"
           git push origin "HEAD:refs/heads/$BRANCH"
 
-      - name: Create or update draft PR
+      - name: Build draft PR body
+        if: needs.prepare.outputs.mode == 'implement'
+        env:
+          ISSUE: ${{ needs.prepare.outputs.issue }}
+          RISK: ${{ needs.prepare.outputs.risk }}
+        run: |
+          {
+            echo '## Summary'
+            echo
+            echo "Codex-backed implementation for #$ISSUE."
+            echo
+            echo "Closes #$ISSUE"
+            echo
+            echo '## Risk'
+            echo
+            echo "$RISK"
+            echo
+            echo '## Codex execution report'
+            echo
+            cat .codex-artifact/codex-report.md
+            echo
+            echo '## Verification boundary'
+            echo
+            echo 'Codex worker verification is development evidence only. Existing required Frontend, Backend, PostgreSQL, and Vercel checks remain the independent review-ready proof. Human merge authority is unchanged.'
+          } > .codex-artifact/pr-body.md
+
+      - name: Create or locate draft PR
         id: pr
         env:
           MODE: ${{ needs.prepare.outputs.mode }}
-          ISSUE: ${{ needs.prepare.outputs.issue }}
           PR_NUMBER: ${{ needs.prepare.outputs.pr }}
           BRANCH: ${{ needs.prepare.outputs.branch }}
           TITLE: ${{ needs.prepare.outputs.title }}
-          RISK: ${{ needs.prepare.outputs.risk }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           if [ "$MODE" = implement ]; then
-            python3 - <<'PY'
-          import os
-          from pathlib import Path
-          report = Path('.codex-artifact/codex-report.md').read_text(encoding='utf-8').strip()
-          body = f"""## Summary
-
-          Codex-backed implementation for #{os.environ['ISSUE']}.
-
-          Closes #{os.environ['ISSUE']}
-
-          ## Risk
-
-          {os.environ['RISK']}
-
-          ## Codex execution report
-
-          {report}
-
-          ## Verification boundary
-
-          Codex worker verification is development evidence only. Existing required Frontend, Backend, PostgreSQL, and Vercel checks remain the independent review-ready proof. Human merge authority is unchanged.
-          """
-          Path('.codex-artifact/pr-body.md').write_text(body, encoding='utf-8')
-          PY
             PR_URL="$(gh pr create --draft --base main --head "$BRANCH" --title "$TITLE" --body-file .codex-artifact/pr-body.md)"
           else
             PR_URL="$(gh pr view "$PR_NUMBER" --json url --jq .url)"
           fi
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
 
-      - name: Report publication result to governing issue/PR
+      - name: Report publication result to governing issue or PR
         uses: actions/github-script@v7
         env:
           PR_URL: ${{ steps.pr.outputs.url }}

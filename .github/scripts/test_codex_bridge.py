@@ -171,16 +171,20 @@ class ApprovalTests(unittest.TestCase):
         binding_base_sha: str = "a" * 40,
         plan_author: str = "github-actions[bot]",
         approval_scope_override: str | None = None,
+        plan_status: str = "plan",
+        context_expansion_requests=None,
     ):
+        if context_expansion_requests is None:
+            context_expansion_requests = []
         plan = {
-            "status": "plan",
+            "status": plan_status,
             "summary": "bounded plan",
             "files_considered": ["backend/Program.cs"],
             "plan": ["change one thing"],
             "findings": [],
             "risks": ["none beyond scope"],
             "verification": ["run focused tests"],
-            "context_expansion_requests": [],
+            "context_expansion_requests": context_expansion_requests,
         }
         digest = bridge.canonical_digest(plan)
         task = packet(
@@ -273,6 +277,37 @@ class ApprovalTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self.build_approval_fixture(root, approval_scope_override="d" * 64)
+            with self.assertRaises(SystemExit):
+                bridge.verify_approval(self.make_args(root))
+
+    def test_context_expansion_result_cannot_authorize_implementation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.build_approval_fixture(
+                root,
+                plan_status="context_expansion_required",
+                context_expansion_requests=[
+                    {
+                        "path": "backend/Controllers/ExpensesController.cs",
+                        "reason": "Need the write-boundary contract.",
+                    }
+                ],
+            )
+            with self.assertRaises(SystemExit):
+                bridge.verify_approval(self.make_args(root))
+
+    def test_plan_with_unresolved_context_request_cannot_authorize_implementation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.build_approval_fixture(
+                root,
+                context_expansion_requests=[
+                    {
+                        "path": "backend/Controllers/ExpensesController.cs",
+                        "reason": "Still unresolved.",
+                    }
+                ],
+            )
             with self.assertRaises(SystemExit):
                 bridge.verify_approval(self.make_args(root))
 

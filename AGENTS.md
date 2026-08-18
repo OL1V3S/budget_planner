@@ -37,6 +37,44 @@ sources relevant to the task:
 Do not treat planned roadmap behavior as current architecture or executable
 behavior.
 
+## Project continuation and task resolution
+
+Conversation memory, project summaries, and prior-chat context may provide
+useful hints, but they are not authoritative for current execution state. Live
+GitHub and repository state override them when they conflict.
+
+When asked to **“Continue Budget Planner”** or **“Where are we?”**, reconstruct
+current state before declaring current work, in this order:
+
+1. current `main` and the latest merged repository state;
+2. open pull requests;
+3. open GitHub issues;
+4. recent merged pull requests and their linked issues;
+5. `ROADMAP.md` and other applicable canonical repository documents.
+
+Then report what most recently completed, whether any work is currently active,
+what roadmap or product decision is next to consider, and any unresolved
+approval or cleanup state.
+
+Never select a closed or merged issue as current work merely because prior
+conversation context names it.
+
+When asked to **“Work on the next task”**, resolve executable work in this order:
+
+1. an explicitly attached or current GitHub issue;
+2. an issue number explicitly named by the human;
+3. durable GitHub or repository state that explicitly designates an active or
+   next issue.
+
+If none of those selects executable work, stop and enter product/planning mode
+with the human instead of choosing a roadmap item autonomously. Product planning
+and engineering execution remain distinct. `ROADMAP.md` is an engineering
+roadmap, not a product backlog or automatic execution queue.
+
+These continuation rules do not change existing risk approvals, verification
+requirements, publication rules, production-operation authority, or human merge
+authority.
+
 ## General workflow
 
 ### New work

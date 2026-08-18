@@ -23,6 +23,7 @@ REF_RE = re.compile(r"^[A-Za-z0-9._/-]+$")
 BRANCH_RE = re.compile(r"^(feat|fix|chore|docs|test)/[A-Za-z0-9._/-]+$")
 TASK_FENCE_RE = re.compile(r"```codex-task\s*(\{.*?\})\s*```", re.DOTALL)
 PLAN_FENCE_RE = re.compile(r"```codex-plan\s*(\{.*?\})\s*```", re.DOTALL)
+PLAN_BINDING_RE = re.compile(r"```codex-plan-binding\s*(\{.*?\})\s*```", re.DOTALL)
 APPROVAL_FENCE_RE = re.compile(r"```codex-approval\s*(\{.*?\})\s*```", re.DOTALL)
 GLOB_CHARS = "*?["
 
@@ -200,18 +201,21 @@ def parse_task_comment(args: argparse.Namespace) -> None:
     if mode == "fix" and base_ref != branch:
         fail("fix runs must bind base_ref to the existing PR branch")
 
-    requires_approval = mode in {"implement", "fix"} and risk in {"MEDIUM", "HIGH"}
+    # Ordinary review corrections inherit the approved PR scope and do not need a
+    # second product-risk approval. Scope-expanding corrections must go back
+    # through normal task planning/approval before they are triggered as fixes.
+    requires_approval = mode == "implement" and risk in {"MEDIUM", "HIGH"}
     plan_sha256 = packet.get("plan_sha256", "")
     plan_comment_id = packet.get("plan_comment_id")
     approval_comment_id = packet.get("approval_comment_id")
 
     if requires_approval:
         if not isinstance(plan_sha256, str) or not SHA256_RE.fullmatch(plan_sha256):
-            fail("MEDIUM/HIGH write mode requires plan_sha256")
+            fail("MEDIUM/HIGH implementation requires plan_sha256")
         if not isinstance(plan_comment_id, int) or plan_comment_id <= 0:
-            fail("MEDIUM/HIGH write mode requires plan_comment_id")
+            fail("MEDIUM/HIGH implementation requires plan_comment_id")
         if not isinstance(approval_comment_id, int) or approval_comment_id <= 0:
-            fail("MEDIUM/HIGH write mode requires approval_comment_id")
+            fail("MEDIUM/HIGH implementation requires approval_comment_id")
 
     normalized = {
         "issue": issue,
@@ -264,8 +268,8 @@ def extract_fenced_json(body: str, pattern: re.Pattern[str], label: str) -> dict
 
 def verify_approval(args: argparse.Namespace) -> None:
     packet = load_json(args.packet)
-    if packet["risk"] not in {"MEDIUM", "HIGH"} or packet["mode"] not in {"implement", "fix"}:
-        fail("approval verification is only for MEDIUM/HIGH write modes")
+    if packet["risk"] not in {"MEDIUM", "HIGH"} or packet["mode"] != "implement":
+        fail("approval verification is only for MEDIUM/HIGH implementation")
 
     plan_comment = load_json(args.plan_comment)
     approval_comment = load_json(args.approval_comment)
@@ -277,10 +281,21 @@ def verify_approval(args: argparse.Namespace) -> None:
     plan_author = ((plan_comment.get("user") or {}).get("login") or "")
     if plan_author not in {"github-actions[bot]", OWNER}:
         fail("plan comment was not produced by the trusted workflow/owner")
-    plan = extract_fenced_json(plan_comment.get("body", ""), PLAN_FENCE_RE, "codex-plan")
+    plan_body = plan_comment.get("body", "")
+    plan = extract_fenced_json(plan_body, PLAN_FENCE_RE, "codex-plan")
+    binding = extract_fenced_json(plan_body, PLAN_BINDING_RE, "codex-plan-binding")
     digest = canonical_digest(plan)
+
     if digest != packet["plan_sha256"]:
         fail("plan digest does not match the implementation task packet")
+    if binding.get("issue") != packet["issue"]:
+        fail("plan binding issue does not match")
+    if binding.get("base_sha") != packet["base_sha"]:
+        fail("approved plan was generated from a different base commit")
+    if binding.get("plan_sha256") != digest:
+        fail("plan binding digest does not match plan content")
+    if binding.get("mode") not in {"plan", "audit"}:
+        fail("plan binding mode is not a read-only planning/audit result")
 
     approval_author = ((approval_comment.get("user") or {}).get("login") or "")
     if approval_author != OWNER:
@@ -326,7 +341,16 @@ def build_context(args: argparse.Namespace) -> None:
 
 def git_paths(repo: Path) -> set[str]:
     changed = subprocess.run(
-        ["git", "-C", str(repo), "diff", "--name-only", "--diff-filter=ACMRTUXB", "HEAD"],
+        [
+            "git",
+            "-C",
+            str(repo),
+            "diff",
+            "--no-ext-diff",
+            "--name-only",
+            "--diff-filter=ACMRTUXB",
+            "HEAD",
+        ],
         check=True,
         capture_output=True,
         text=True,

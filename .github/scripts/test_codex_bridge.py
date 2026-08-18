@@ -65,6 +65,10 @@ class ParseTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             self.run_parse(packet(target_files=["backend/**/*.cs"]))
 
+    def test_authority_docs_must_include_agents(self):
+        with self.assertRaises(SystemExit):
+            self.run_parse(packet(authority_docs=["docs/verification.md"]))
+
     def test_implement_requires_write_paths(self):
         with self.assertRaises(SystemExit):
             self.run_parse(
@@ -319,6 +323,7 @@ class WriteBoundaryTests(unittest.TestCase):
         subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
         subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
         (repo / "seed.txt").write_text("seed\n", encoding="utf-8")
+        (repo / "blocked.txt").write_text("blocked\n", encoding="utf-8")
         subprocess.run(["git", "add", "."], cwd=repo, check=True)
         subprocess.run(["git", "commit", "-qm", "base"], cwd=repo, check=True)
 
@@ -337,7 +342,15 @@ class WriteBoundaryTests(unittest.TestCase):
             self.initialize_repo(repo)
             (repo / "blocked.txt").write_text("after\n", encoding="utf-8")
             with self.assertRaises(SystemExit):
-                self.validate(repo, ["allowed.txt"])
+                self.validate(repo, ["seed.txt"])
+
+    def test_out_of_scope_deletion_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            self.initialize_repo(repo)
+            (repo / "blocked.txt").unlink()
+            with self.assertRaises(SystemExit):
+                self.validate(repo, ["seed.txt"])
 
     def test_allowed_prefix_accepts_new_file(self):
         with tempfile.TemporaryDirectory() as tmp:

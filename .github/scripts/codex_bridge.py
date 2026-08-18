@@ -11,7 +11,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +24,7 @@ BRANCH_RE = re.compile(r"^(feat|fix|chore|docs|test)/[A-Za-z0-9._/-]+$")
 TASK_FENCE_RE = re.compile(r"```codex-task\s*(\{.*?\})\s*```", re.DOTALL)
 PLAN_FENCE_RE = re.compile(r"```codex-plan\s*(\{.*?\})\s*```", re.DOTALL)
 APPROVAL_FENCE_RE = re.compile(r"```codex-approval\s*(\{.*?\})\s*```", re.DOTALL)
+GLOB_CHARS = "*?["
 
 
 def fail(message: str) -> None:
@@ -72,7 +72,11 @@ def list_of_paths(packet: dict[str, Any], field: str, *, required: bool) -> list
     raw = packet.get(field, [])
     if not isinstance(raw, list) or any(not isinstance(item, str) for item in raw):
         fail(f"{field} must be an array of strings")
+    if len(raw) > 200:
+        fail(f"{field} contains too many entries")
     paths = [safe_repo_path(item, field=field) for item in raw]
+    if field != "allowed_write_paths" and any(any(char in path for char in GLOB_CHARS) for path in paths):
+        fail(f"{field} must name exact files, not glob patterns")
     if required and not paths:
         fail(f"{field} must not be empty")
     if len(paths) != len(set(paths)):
@@ -99,8 +103,15 @@ def emit_output(name: str, value: Any) -> None:
         text = ""
     else:
         text = str(value)
+    if "\n" in text or "\r" in text:
+        fail(f"workflow output {name} may not contain newlines")
     with open(output, "a", encoding="utf-8") as handle:
         handle.write(f"{name}={text}\n")
+
+
+def comment_issue_matches(comment: dict[str, Any], issue: int) -> bool:
+    issue_url = comment.get("issue_url", "")
+    return isinstance(issue_url, str) and issue_url.rstrip("/").endswith(f"/{issue}")
 
 
 def parse_task_comment(args: argparse.Namespace) -> None:
@@ -126,8 +137,20 @@ def parse_task_comment(args: argparse.Namespace) -> None:
         fail("task packet mode must exactly match the command")
 
     issue = packet.get("issue")
-    if not isinstance(issue, int) or issue <= 0 or issue != args.event_issue:
-        fail("task packet issue must match the issue/PR receiving the command")
+    if not isinstance(issue, int) or issue <= 0:
+        fail("issue must be a positive integer")
+
+    pr = packet.get("pr")
+    if mode == "fix":
+        if not isinstance(pr, int) or pr <= 0:
+            fail("fix mode requires a positive pr number")
+        if args.event_issue not in {issue, pr}:
+            fail("fix command must be posted on the governing issue or target PR")
+    else:
+        if issue != args.event_issue:
+            fail("task packet issue must match the issue receiving the command")
+        if pr is not None and (not isinstance(pr, int) or pr <= 0):
+            fail("pr must be a positive integer when supplied")
 
     risk = packet.get("risk")
     if risk not in RISKS:
@@ -144,7 +167,7 @@ def parse_task_comment(args: argparse.Namespace) -> None:
     if len(instructions) > 20000:
         fail("instructions are too large")
 
-    target_files = list_of_paths(packet, "target_files", required=mode in {"plan", "audit"})
+    target_files = list_of_paths(packet, "target_files", required=True)
     authority_docs = list_of_paths(packet, "authority_docs", required=True)
     validate_authority_docs(authority_docs)
     allowed_write_paths = list_of_paths(
@@ -153,7 +176,9 @@ def parse_task_comment(args: argparse.Namespace) -> None:
 
     branch = packet.get("branch", "")
     title = packet.get("title", "")
-    pr = packet.get("pr")
+
+    if mode in {"plan", "audit"} and base_ref != "main":
+        fail("v1 plan/audit runs must target current main")
 
     if mode in {"implement", "fix"}:
         if not isinstance(branch, str) or not BRANCH_RE.fullmatch(branch):
@@ -161,14 +186,19 @@ def parse_task_comment(args: argparse.Namespace) -> None:
         safe_ref(branch, field="branch")
         if branch == "main":
             fail("main may never be used as a Codex write branch")
-        if not isinstance(title, str) or not title.strip() or len(title) > 160:
-            fail("implementation/fix title must be a non-empty string <= 160 characters")
+        if (
+            not isinstance(title, str)
+            or not title.strip()
+            or len(title) > 160
+            or "\n" in title
+            or "\r" in title
+        ):
+            fail("implementation/fix title must be one non-empty line <= 160 characters")
 
-    if mode == "fix":
-        if not isinstance(pr, int) or pr <= 0:
-            fail("fix mode requires a positive pr number")
-    elif pr is not None and (not isinstance(pr, int) or pr <= 0):
-        fail("pr must be a positive integer when supplied")
+    if mode == "implement" and base_ref != "main":
+        fail("new implementation runs must start from main")
+    if mode == "fix" and base_ref != branch:
+        fail("fix runs must bind base_ref to the existing PR branch")
 
     requires_approval = mode in {"implement", "fix"} and risk in {"MEDIUM", "HIGH"}
     plan_sha256 = packet.get("plan_sha256", "")
@@ -239,6 +269,10 @@ def verify_approval(args: argparse.Namespace) -> None:
 
     plan_comment = load_json(args.plan_comment)
     approval_comment = load_json(args.approval_comment)
+    if not comment_issue_matches(plan_comment, packet["issue"]):
+        fail("plan comment does not belong to the governing issue")
+    if not comment_issue_matches(approval_comment, packet["issue"]):
+        fail("approval comment does not belong to the governing issue")
 
     plan_author = ((plan_comment.get("user") or {}).get("login") or "")
     if plan_author not in {"github-actions[bot]", OWNER}:
@@ -309,7 +343,7 @@ def git_paths(repo: Path) -> set[str]:
 def rule_matches(path: str, rule: str) -> bool:
     if rule.endswith("/"):
         return path.startswith(rule)
-    if any(char in rule for char in "*?["):
+    if any(char in rule for char in GLOB_CHARS):
         return fnmatch.fnmatchcase(path, rule)
     return path == rule
 

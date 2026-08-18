@@ -20,6 +20,23 @@ Agents should optimize for:
 - `backend.Tests/` — backend test suite
 - `.github/workflows/` — CI workflows
 
+## Canonical repository knowledge
+
+Use this file as the concise operational entry point, then read only the
+sources relevant to the task:
+
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — current system boundaries, module organization,
+  dependency direction, and planned extension points;
+- [`ROADMAP.md`](ROADMAP.md) — engineering priorities, sequencing, and dependencies;
+- [`docs/financial-domain-invariants.md`](docs/financial-domain-invariants.md) — approved financial semantics and
+  decisions that require explicit human approval to change;
+- [`docs/verification.md`](docs/verification.md) — canonical commands, required evidence, environment
+  fallbacks, and review-ready criteria;
+- the applicable GitHub Issue — task-specific scope and acceptance criteria.
+
+Do not treat planned roadmap behavior as current architecture or executable
+behavior.
+
 ## General workflow
 
 ### New work
@@ -51,6 +68,23 @@ When addressing review feedback or continuing work on an existing draft PR:
 Do not create a new branch for ordinary review corrections.
 
 Do not rebase or merge `main` into an existing PR branch unless explicitly requested or required to resolve a known integration problem.
+
+### Post-merge branch lifecycle
+
+Review corrections stay on the existing feature/PR branch until merge. Keep a
+feature branch until GitHub confirms that its PR is merged and the associated
+work is complete.
+
+After that confirmation, delete the merged remote feature branch when the
+current environment and tooling permit the target and merge state to be
+verified safely. Never delete `main`, the default branch, a protected branch, a
+branch with an open or unmerged PR, or a branch containing unmerged work.
+Prefer remote cleanup after merge; local stale branches may be removed later
+when local Git tooling is available.
+
+If deletion cannot be performed or verified safely, do not guess and do not
+block the already-approved merge. Report that remote branch cleanup remains
+required. Human merge authority remains unchanged.
 
 ### General safety
 
@@ -170,9 +204,40 @@ A refactor intended to preserve behavior should keep existing assertions unless 
 
 For backend-affecting changes, run the relevant restore/build/test commands.
 
-At minimum, before publication of backend-affecting work, confirm the full backend test suite passes.
+At minimum, before a backend-affecting PR is review-ready, confirm the full
+applicable backend test suite passes locally or through required CI evidence.
 
 Do not create or apply EF Core migrations unless the issue explicitly authorizes a schema change.
+
+## Verification evidence and environment capabilities
+
+Follow `docs/verification.md`. At the start of work, determine which required
+tools and local services are actually available. Report each relevant result
+as passed locally, not run locally because a capability is unavailable, or
+required/proven by CI. Never report unavailable verification as passed.
+
+A draft PR may be published with disclosed local verification gaps when the
+risk workflow permits it. It is not review-ready until all required executable
+CI evidence has succeeded and remaining gaps are disclosed.
+
+Do not use Neon, Render, production, or another hosted database as a substitute
+for unavailable local PostgreSQL test infrastructure. Use the repository's
+PostgreSQL CI lane.
+
+## Harness improvement
+
+When an agent failure reveals a recurring or important weakness, prefer the
+smallest appropriate durable harness improvement over indefinite prompt
+reminders, in this order:
+
+1. mechanical prevention or check when practical;
+2. automated verification or test;
+3. durable repository instruction;
+4. one-off prompt reminder only for genuinely task-specific concerns.
+
+Do not add automation solely to satisfy this principle. The existing
+PostgreSQL integration-test guard, which rejects remote and non-disposable
+database targets, is an example of mechanical prevention.
 
 ## Dependencies
 

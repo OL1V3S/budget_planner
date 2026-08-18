@@ -22,12 +22,21 @@ References #
 
 ## Verification
 
-- [ ] Frontend tests
-- [ ] Frontend lint
-- [ ] Frontend build
-- [ ] Backend tests, if applicable
-- [ ] `git diff --check`
-- [ ] Manual verification, if applicable
+### Passed locally
+
+<!-- List commands/checks that actually ran successfully. -->
+
+### Not run locally — capability unavailable
+
+<!-- List unavailable tools/services and the CI evidence required instead. -->
+
+### Required/proven by CI
+
+<!-- List applicable CI jobs and their current results. Do not call pending evidence passed. -->
+
+### Remaining verification gaps
+
+<!-- List remaining gaps, or explicitly state "None." A draft PR is not review-ready until required CI succeeds and gaps are disclosed. -->
 
 ## API impact
 
@@ -56,3 +65,6 @@ None.
 ## Review notes
 
 <!-- Anything the reviewer should pay special attention to -->
+
+After merge is confirmed and the work is complete, clean up the merged remote
+feature branch according to `AGENTS.md`. This is a post-merge action.

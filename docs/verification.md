@@ -1,0 +1,127 @@
+# Verification Contract
+
+## Purpose
+
+This document is the canonical source for proving repository changes correct.
+Required evidence depends on the files and behavior changed, not merely on
+which commands happen to be available locally.
+
+Record verification using these exact evidence states:
+
+- **Passed locally** — the command ran successfully in the current workspace.
+- **Not run locally — capability unavailable** — the required tool or service
+  was unavailable; this is a disclosed evidence gap, not a pass.
+- **Required/proven by CI** — name the required GitHub Actions job and record
+  its result when known.
+
+Focused checks support iteration. They do not replace the full applicable
+verification required before a pull request is review-ready.
+
+## Frontend verification
+
+The canonical frontend entry point is:
+
+```bash
+cd frontend
+npm ci
+npm run verify
+```
+
+`npm run verify` runs the Vitest suite, ESLint, and the Vite production build.
+After dependencies are already installed and unchanged, `npm ci` need not be
+repeated for every iteration.
+
+Focused tests may be run during development, for example:
+
+```bash
+cd frontend
+npm test -- src/path/to/changed.test.jsx
+```
+
+Before review-ready status, frontend changes require the complete
+`npm run verify` result and successful **Frontend test, lint, and build** CI
+evidence.
+
+## Backend verification
+
+Run the same non-PostgreSQL verification represented by Backend CI:
+
+```bash
+dotnet restore backend.Tests/backend.Tests.csproj
+dotnet build backend/backend.csproj --configuration Release --no-restore
+dotnet test backend.Tests/backend.Tests.csproj --configuration Release --no-restore --filter "Category!=PostgreSQL"
+```
+
+Focused `dotnet test` filters may be used while iterating. Before review-ready
+status, backend changes require the applicable full suite and successful
+**Backend build and tests** CI evidence.
+
+## PostgreSQL integration verification
+
+Changes affecting EF Core mappings, migrations, financial persistence,
+relational queries, constraints, precision, timestamps, indexes, transactions,
+or concurrency also require the PostgreSQL lane.
+
+Local execution requires PostgreSQL and an isolated disposable local database.
+Set `BUDGETPLANNER_POSTGRESQL_TEST_CONNECTION` to a connection using
+`localhost`, `127.0.0.1`, or `::1`, with database `budget_planner_ci` or a name
+beginning with `budget_planner_test_`. The tests deliberately delete and
+recreate that database.
+
+```bash
+dotnet restore backend.Tests/backend.Tests.csproj
+dotnet build backend.Tests/backend.Tests.csproj --configuration Release --no-restore
+dotnet test backend.Tests/backend.Tests.csproj --configuration Release --no-build --filter "Category=PostgreSQL&FullyQualifiedName~Migration_chain"
+dotnet test backend.Tests/backend.Tests.csproj --configuration Release --no-build --filter "Category=PostgreSQL&FullyQualifiedName!~Migration_chain"
+```
+
+The test harness mechanically rejects remote hosts and database names not
+explicitly designated as disposable. Never substitute Neon, Render,
+production, or another hosted database when local PostgreSQL is unavailable.
+Use successful **PostgreSQL financial integration** CI evidence instead.
+
+## Documentation-only changes
+
+For changes limited to documentation or repository instructions:
+
+- inspect every changed file and the complete diff;
+- confirm referenced repository paths and relative Markdown links exist;
+- verify commands and CI job names against the current executable definitions;
+- run `git diff --check` when Git is available; and
+- allow the repository's normal pull-request CI to detect unintended effects.
+
+Documentation-only work does not require inventing runtime tests. If normal CI
+runs for the PR, its required jobs must still succeed before review-ready
+status.
+
+## Restricted workstation fallback
+
+At the beginning of work, determine whether Git, npm/Node.js, the .NET SDK, and
+local PostgreSQL are available when relevant.
+
+- If npm is unavailable, report frontend verification as **Not run locally —
+  capability unavailable** and require Frontend CI when relevant.
+- If .NET is unavailable, report backend verification the same way and require
+  Backend CI when relevant.
+- If local PostgreSQL is unavailable, report it and require the PostgreSQL CI
+  lane; do not use a hosted or production substitute.
+- If Git CLI is unavailable, do not claim local branch, worktree, diff, or
+  `git diff --check` evidence. Use GitHub Desktop or connected GitHub evidence
+  where it can establish the fact, and disclose anything still unverified.
+
+A draft PR may be published with disclosed local gaps when `AGENTS.md` permits
+it. Missing local tools do not weaken the verification requirement and must
+never be recorded as a pass.
+
+## Full review-ready criteria
+
+A draft PR is review-ready only when:
+
+- the verification appropriate to the changed scope is identified;
+- every local result and unavailable capability is reported accurately;
+- all required Frontend CI, Backend CI, and PostgreSQL CI jobs have succeeded;
+- remaining verification gaps are disclosed;
+- the complete diff has been inspected for scope and unintended changes; and
+- MEDIUM/HIGH approvals and all other `AGENTS.md` gates are satisfied.
+
+Human review and merge authority remain unchanged.

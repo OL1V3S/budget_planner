@@ -141,77 +141,110 @@ A draft PR may be published with disclosed local gaps when `AGENTS.md` permits
 it. Missing local tools do not weaken the verification requirement and must
 never be recorded as a pass.
 
-## Codex bridge evidence
+## Local Codex execution evidence
 
-When `.github/workflows/codex-agent.yml` is active, distinguish Codex worker
-evidence from the repository's independent proof layer.
+Budget Planner's normal AI implementation agent is local Codex in the ChatGPT
+desktop app, operating on a local Git checkout under the authority described in
+`AGENTS.md` and the governing GitHub Issue.
 
-For `/codex plan` and `/codex audit`:
+Local Codex output is development evidence. It is not an independent substitute
+for GitHub CI, PR review, or human merge authority.
 
-- every task packet must include `AGENTS.md` in `authority_docs`;
-- a separate context-preparation job generates a structural repository map and
-  copies only exact targeted files plus allowed canonical authority docs;
-- the Codex job receives only that pruned artifact, not a full repository
-  checkout;
-- insufficient context must produce a bounded context-expansion request rather
-  than an unreported broad read; and
-- a result that still has `context_expansion_requests` or reports
-  `context_expansion_required` is not eligible to authorize implementation.
+### Task/authority evidence
 
-For MEDIUM/HIGH `/codex implement`, approval is intentionally narrower than a
-plain “approved” flag. The workflow binds together:
+Before implementation, establish and record:
 
-- the canonical SHA-256 of the exact trusted Codex plan/audit result;
-- the governing issue;
-- the exact base commit used for that result; and
-- `scope_sha256`, the canonical SHA-256 of the normalized implementation scope:
-  risk, base ref/SHA, intended branch/title, targeted files, authority docs,
-  exact allowed write paths/directory prefixes, and task instructions.
+- the governing GitHub Issue and its current scope/acceptance criteria;
+- the risk classification;
+- the exact current base branch/commit used for new work;
+- the applicable canonical authority documents;
+- any MEDIUM/HIGH plan and explicit human approval required by `AGENTS.md`.
 
-The owner-authored approval marker references both the exact plan digest and the
-exact implementation-scope digest. A changed plan, stale base, broadened write
-set, changed instructions, or otherwise different implementation packet does
-not inherit the old approval.
+For MEDIUM/HIGH work coordinated through ChatGPT, the plan and human approval
+should be recorded durably on the governing issue before implementation begins.
+A materially changed plan, broadened scope, changed financial/security semantic,
+or stale/changed prerequisite does not silently inherit an earlier approval.
 
-For `/codex implement` and `/codex fix`:
+### Context-pruning evidence
 
-- Codex may run focused/full checks in its isolated worker, but those results are
-  development evidence only;
-- Codex receives no publication GitHub App token and its checkout has no
-  persisted GitHub credential;
-- allowed write entries are exact files or explicit directory prefixes, never
-  globs;
-- additions, modifications, and deletions are all counted when enforcing the
-  write boundary, and Codex-created/modified symlinks are rejected;
-- the publication job runs separately without `OPENAI_API_KEY`, revalidates the
-  base/PR state, applies the patch, runs `git diff --check`, and publishes only
-  to the intended feature or existing PR branch; and
-- ordinary review fixes stay on the existing PR branch and remain bounded to the
-  review finding. Scope-expanding corrections return to normal planning and
-  approval.
+Local Codex has access to a full checkout, but repository inspection remains
+**pruned by default, expand only with a concrete reason**.
 
-The draft PR then requires the same applicable **Frontend test, lint, and
+When useful, Codex may generate the lightweight structural map with:
+
+```bash
+python3 .github/scripts/build_repo_map.py --root . --output /tmp/budget-planner-repo-map.txt
+```
+
+The expected inspection sequence is:
+
+1. `AGENTS.md` + governing issue + task-relevant canonical authority docs;
+2. structural map when useful for navigation;
+3. exact targeted files/symbols owning the requested behavior;
+4. the smallest additional paths required by concrete dependencies discovered
+   during inspection/implementation.
+
+Plans and final implementation reports should identify the main files inspected
+and record material context expansions with a short reason. Do not treat a broad
+repository scan as stronger evidence merely because more files were read.
+
+### Local implementation evidence
+
+For implementation or bounded review correction, report:
+
+- local branch/ref and starting base when verified;
+- files changed;
+- focused/full commands actually run and their exact pass/fail state;
+- required commands that could not run locally and why;
+- material context expansions beyond the initially targeted area;
+- resulting local commit SHA when a commit was created;
+- remaining risks/gaps;
+- whether the branch was pushed and whether a draft PR was actually created.
+
+Never record Codex's statement that tests passed unless the corresponding
+command was actually executed successfully in the prepared local environment.
+
+### GitHub publication and independent proof
+
+The intended path is:
+
+```text
+local Codex implementation
+-> feature/PR branch + commit
+-> push to GitHub
+-> draft pull request
+-> applicable GitHub CI
+-> ChatGPT independent PR/diff/CI review
+-> human merge
+```
+
+If local Codex can authenticate safely to GitHub, it may push the approved
+feature/PR branch and create the draft PR. If not, use the existing
+**publication handoff required** fallback with GitHub Desktop/web. Neither path
+allows a direct push to `main` or automatic merge.
+
+The resulting draft PR requires the same applicable **Frontend test, lint, and
 build**, **Backend build and tests**, **PostgreSQL financial integration**, and
-Vercel evidence as any other change. Codex saying that tests passed is never a
-replacement for those independent checks.
+Vercel evidence as any other change. Local Codex test results support iteration
+but never replace those independent checks.
 
-The bridge also has its own **Codex bridge policy tests** PR check for task
-packet parsing, trusted-plan/approval binding, implementation-scope binding,
-write-path enforcement, deletion/symlink rejection, helper compilation,
-repository-map generation, and workflow YAML syntax.
+After CI succeeds, ChatGPT should inspect the actual PR diff, review discussion,
+and current CI state. A Codex-generated summary is not sufficient proof of the
+final branch contents.
 
-One-time repository configuration for the bridge uses these names:
+### Review corrections
 
-- Actions secret `OPENAI_API_KEY` — a dedicated OpenAI API credential;
-- repository variable `CODEX_PUBLISHER_CLIENT_ID` — client ID of the dedicated
-  publisher GitHub App; and
-- Actions secret `CODEX_PUBLISHER_PRIVATE_KEY` — private key for that App.
+For a bounded review finding, remain on the existing PR branch, make the
+smallest correction, rerun affected verification, push the updated branch, and
+re-check CI. Scope-expanding corrections return to normal task planning and
+approval.
 
-The publisher GitHub App should be installed only on this repository and grant
-only **Contents: write** and **Pull requests: write** beyond GitHub's required
-metadata access. It must not receive Actions/workflow administration, secrets,
-deployments, environments, or production credentials. Secret values must never
-be pasted into ChatGPT, issues, pull requests, or repository files.
+### Credential boundary
+
+The local-Codex workflow does not require repository `OPENAI_API_KEY` or a
+publisher GitHub App. Never commit ChatGPT credentials, Codex auth state, API
+keys, GitHub tokens, private keys, or other secrets. Local authentication state
+must remain outside the repository.
 
 ## Full review-ready criteria
 

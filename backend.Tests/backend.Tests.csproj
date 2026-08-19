@@ -21,7 +21,14 @@
 
   <ItemGroup>
     <ProjectReference Include="../backend/backend.csproj" />
+    <ProjectReference Include="../backend.PdfWorker/backend.PdfWorker.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <Target Name="PublishContainedPdfWorkerForTests" AfterTargets="Build">
+    <MSBuild Projects="../backend.PdfWorker/backend.PdfWorker.csproj"
+             Targets="Publish"
+             Properties="Configuration=$(Configuration);PublishDir=$(TargetDir)PdfWorker/;SelfContained=false" />
+  </Target>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

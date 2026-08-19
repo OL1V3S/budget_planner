@@ -11,6 +11,7 @@ using BudgetPlanner.Services;
 using BudgetPlanner.Authentication;
 using BudgetPlanner.Configuration;
 using Microsoft.Extensions.Options;
+using BudgetPlanner.Import;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +29,8 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddControllers();
+builder.Services.AddSingleton(new PdfExtractionOptions());
+builder.Services.AddSingleton<IPdfTextExtractor, ContainedPdfTextExtractor>();
 
 builder.Services
     .AddOptions<EmailSettingsOptions>()

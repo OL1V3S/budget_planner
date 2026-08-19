@@ -49,7 +49,7 @@ The initial hard limits are:
 - maximum active parses per authenticated user: **1**; and
 - a small explicitly configured global parse-concurrency cap appropriate to the deployed Render instance.
 
-Implementations must enforce limits as early as practical and stop processing promptly once a limit or cancellation condition is reached. Later changes to these limits require evidence from sanitized fixtures or production-safe operational data and explicit approval rather than silent relaxation.
+Implementations must enforce limits as early as practical and stop processing promptly once a limit or cancellation condition is reached. The bounded extraction layer admits one short-lived parser worker globally and applies a fixed 128 MiB managed-GC-heap ceiling; authenticated per-user admission remains the responsibility of the later upload/orchestration layer. Later changes to these limits require evidence from sanitized fixtures or production-safe operational data and explicit approval rather than silent relaxation.
 
 ## Active and embedded content
 
@@ -63,6 +63,8 @@ The V1 import path is **text extraction only**. It does not render PDFs and must
 - network requests derived from document content.
 
 URLs or action-like text found in a statement are inert input data. No browser, shell, external viewer, or network client should be invoked because of content inside the uploaded document.
+
+The approved extractor runs PdfPig only in a fixed, short-lived worker packaged with the backend. Its executable, empty argument list, environment, and bounded stdin/stdout protocol are selected by application code, never by PDF content. This containment process is not a document-provided external action: it exists so the parent can terminate and positively reap synchronous parser work on cancellation, timeout, protocol failure, or resource failure. It does not authorize general subprocess execution.
 
 ## Raw-document handling and retention
 
@@ -108,7 +110,7 @@ Cancellation and timeout paths must stop parser work promptly and release any he
 
 ## Parser dependency posture
 
-Parser-library selection is not authorized by this document. A later implementation issue must select a maintained .NET PDF text-extraction library and review its license, maintenance posture, security history, API behavior, and compatibility with these non-execution and resource-boundary requirements.
+Issue #66 selected and pinned PdfPig 0.1.15 after review of its Apache-2.0 license, maintenance posture, security history, synchronous API behavior, and compatibility with these boundaries. PdfPig remains confined to the private worker project; upgrades require a renewed dependency and threat-boundary review.
 
 Do not introduce antivirus infrastructure for the initial text-only, non-retained scope unless implementation evidence demonstrates a concrete need. If future work stores, renders, transforms, shares, or broadens the accepted file types, re-evaluate that decision as part of a new threat-model review.
 

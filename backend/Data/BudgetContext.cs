@@ -21,6 +21,10 @@ public class BudgetContext : IdentityDbContext<ApplicationUser>, IDataProtection
             .Property(e => e.Amount)
             .HasColumnType("numeric(18,2)");
 
+        modelBuilder.Entity<Expense>()
+            .Property(e => e.Date)
+            .HasColumnType("date");
+
         modelBuilder.Entity<BudgetLimit>()
             .Property(b => b.LimitAmount)
             .HasColumnType("numeric(18,2)");

@@ -1,8 +1,10 @@
 import { DEFAULT_CATEGORIES } from "../../../shared/constants/categories";
+import { formatLocalCalendarDate, localCalendarDateDaysAgo } from "./calendarDate";
 
 export function filterExpenses(expenses, filters) {
   let filtered = [...(expenses ?? [])];
   const now = new Date();
+  const today = formatLocalCalendarDate(now);
 
   const {
     dateFilter,
@@ -13,25 +15,18 @@ export function filterExpenses(expenses, filters) {
   } = filters;
 
   if (dateFilter === "last7") {
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(now.getDate() - 7);
-    filtered = filtered.filter((exp) => new Date(exp.date) >= sevenDaysAgo);
+    const sevenDayStart = localCalendarDateDaysAgo(6, now);
+    filtered = filtered.filter((exp) => exp.date >= sevenDayStart && exp.date <= today);
   } else if (dateFilter === "last30") {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(now.getDate() - 30);
-    filtered = filtered.filter((exp) => new Date(exp.date) >= thirtyDaysAgo);
+    const thirtyDayStart = localCalendarDateDaysAgo(29, now);
+    filtered = filtered.filter((exp) => exp.date >= thirtyDayStart && exp.date <= today);
   } else if (dateFilter === "thisMonth") {
-    filtered = filtered.filter((exp) => {
-      const d = new Date(exp.date);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    });
+    const currentMonth = today.slice(0, 7);
+    filtered = filtered.filter((exp) => exp.date.startsWith(`${currentMonth}-`));
   } else if (dateFilter === "custom" && customStartDate && customEndDate) {
-    const start = new Date(customStartDate);
-    const end = new Date(customEndDate);
-    filtered = filtered.filter((exp) => {
-      const d = new Date(exp.date);
-      return d >= start && d <= end;
-    });
+    filtered = filtered.filter(
+      (exp) => exp.date >= customStartDate && exp.date <= customEndDate
+    );
   }
 
   if (categoryFilter) {

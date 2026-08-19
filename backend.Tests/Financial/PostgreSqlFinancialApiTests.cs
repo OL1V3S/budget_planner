@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using BudgetPlanner.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -29,6 +31,48 @@ public sealed class PostgreSqlFinancialApiTests
         Assert.Equal("Npgsql.EntityFrameworkCore.PostgreSQL", context.Database.ProviderName);
         Assert.True(await context.Users.AnyAsync(candidate => candidate.Id == user.Id));
         Assert.False((await context.Database.GetPendingMigrationsAsync()).Any());
+
+        await context.Database.OpenConnectionAsync();
+        await using var command = context.Database.GetDbConnection().CreateCommand();
+        command.CommandText =
+            """
+            SELECT data_type
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'Expenses'
+              AND column_name = 'Date';
+            """;
+        Assert.Equal("date", await command.ExecuteScalarAsync());
+    }
+
+    [PostgreSqlFact]
+    public async Task Expense_date_migration_preserves_the_utc_calendar_component()
+    {
+        await using var app = new PostgreSqlFinancialApiTestApplication();
+        using var client = app.CreateTestClient();
+        using var scope = app.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<BudgetContext>();
+        var migrator = context.GetService<IMigrator>();
+
+        await context.Database.EnsureDeletedAsync();
+        await migrator.MigrateAsync("20260812213613_PersistDataProtectionKeys");
+        await context.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO "AspNetUsers"
+                ("Id", "EmailConfirmed", "PhoneNumberConfirmed", "TwoFactorEnabled", "LockoutEnabled", "AccessFailedCount")
+            VALUES
+                ('date-migration-user', false, false, false, false, 0);
+
+            INSERT INTO "Expenses" ("Description", "Amount", "Date", "Category", "UserId")
+            VALUES ('month edge', 12.34, TIMESTAMPTZ '2026-08-31 00:00:00+00', 'food', 'date-migration-user');
+            """);
+
+        await migrator.MigrateAsync();
+
+        var migratedDate = await context.Database
+            .SqlQuery<DateOnly>($"SELECT \"Date\" AS \"Value\" FROM \"Expenses\"")
+            .SingleAsync();
+        Assert.Equal(new DateOnly(2026, 8, 31), migratedDate);
     }
 
     [PostgreSqlFact]
@@ -41,7 +85,7 @@ public sealed class PostgreSqlFinancialApiTests
         {
             description = "postgres precision",
             amount = 123.456m,
-            date = "2026-08-15T12:30:00",
+            date = "2026-08-15",
             category = "food"
         });
 
@@ -61,7 +105,7 @@ public sealed class PostgreSqlFinancialApiTests
         {
             description = " postgres expense ",
             amount = 123.45m,
-            date = "2026-08-15T12:30:00",
+            date = "2026-08-15",
             category = " Food "
         });
         var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -94,7 +138,7 @@ public sealed class PostgreSqlFinancialApiTests
             id,
             description = " updated postgres expense ",
             amount = 4.50m,
-            date = "2026-09-03T09:45:00",
+            date = "2026-09-03",
             category = " FOOD   MARKET "
         });
         Assert.Equal(HttpStatusCode.NoContent, updateResponse.StatusCode);
@@ -104,7 +148,7 @@ public sealed class PostgreSqlFinancialApiTests
         Assert.Equal(4.50m, persisted.Amount);
         Assert.Equal("updated postgres expense", persisted.Description);
         Assert.Equal("food market", persisted.Category);
-        Assert.Equal(new DateTime(2026, 9, 3, 9, 45, 0, DateTimeKind.Utc), persisted.Date);
+        Assert.Equal(new DateOnly(2026, 9, 3), persisted.Date);
 
         var deleteResponse = await owner.Client.DeleteAsync($"/api/expenses/{id}");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);

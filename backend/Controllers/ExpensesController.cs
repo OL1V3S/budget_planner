@@ -69,7 +69,7 @@ public class ExpensesController : ControllerBase
             UserId = userId,
             Description = description,
             Amount = request.Amount,
-            Date = DateTime.SpecifyKind(request.Date, DateTimeKind.Utc),
+            Date = request.Date,
             Category = category
         };
 
@@ -117,7 +117,7 @@ public class ExpensesController : ControllerBase
 
         existingExpense.Description = description;
         existingExpense.Amount = request.Amount;
-        existingExpense.Date = DateTime.SpecifyKind(request.Date, DateTimeKind.Utc);
+        existingExpense.Date = request.Date;
         existingExpense.Category = category;
 
         await _context.SaveChangesAsync();

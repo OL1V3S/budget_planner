@@ -20,8 +20,8 @@ describe('Analytics page ownership', () => {
     vi.setSystemTime(new Date(2026, 7, 14, 12, 0, 0))
     useExpenses.mockReturnValue({
       expenses: [
-        { category: 'food', amount: 12.34, date: new Date(2026, 7, 2).toISOString() },
-        { category: 'bills', amount: 50, date: new Date(2026, 6, 2).toISOString() },
+        { category: 'food', amount: 12.34, date: '2026-08-02' },
+        { category: 'bills', amount: 50, date: '2026-07-02' },
       ],
       loading: false,
     })

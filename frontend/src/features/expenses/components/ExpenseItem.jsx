@@ -1,5 +1,6 @@
 import { DEFAULT_CATEGORIES } from "../../../shared/constants/categories";
 import { displayText } from "../../../utils/text";
+import { formatExpenseDate } from "../utils/calendarDate";
 
 export default function ExpenseItem({
   expense,
@@ -57,7 +58,7 @@ export default function ExpenseItem({
           <input
             aria-label="Edit date"
             type="date"
-            value={editingData.date ? editingData.date.slice(0, 10) : ""}
+            value={editingData.date || ""}
             onChange={(e) =>
               setEditingData((prev) => ({
                 ...prev,
@@ -66,7 +67,7 @@ export default function ExpenseItem({
             }
           />
         ) : (
-          new Date(expense.date).toLocaleDateString()
+          formatExpenseDate(expense.date)
         )}
       </td>
 

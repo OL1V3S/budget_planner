@@ -111,7 +111,7 @@ internal abstract class FinancialApiTestApplicationBase : WebApplicationFactory<
         string userId,
         string description = "seeded expense",
         decimal amount = 12.34m,
-        DateTime? date = null,
+        DateOnly? date = null,
         string category = "food")
     {
         using var scope = Services.CreateScope();
@@ -121,7 +121,7 @@ internal abstract class FinancialApiTestApplicationBase : WebApplicationFactory<
             UserId = userId,
             Description = description,
             Amount = amount,
-            Date = date ?? new DateTime(2026, 8, 12, 0, 0, 0, DateTimeKind.Utc),
+            Date = date ?? new DateOnly(2026, 8, 12),
             Category = category
         };
         context.Expenses.Add(expense);

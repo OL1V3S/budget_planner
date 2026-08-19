@@ -8,20 +8,23 @@ namespace BudgetPlanner.Import;
 public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
 {
     private const string HeapLimitHex = "8000000";
+    private static readonly TimeSpan ReapTimeout = TimeSpan.FromSeconds(2);
     private static readonly SemaphoreSlim WorkerPermit = new(1, 1);
     private readonly PdfExtractionOptions options;
     private readonly Func<ProcessStartInfo> startInfoFactory;
     private readonly Action<int>? processStarted;
     private readonly Action<PdfProcessObservation>? processObserved;
+    private readonly Func<Process, Task<bool>> terminateAndReap;
 
     public ContainedPdfTextExtractor(PdfExtractionOptions? options = null)
-        : this(options, null, null, null) { }
+        : this(options, null, null, null, null) { }
 
     internal ContainedPdfTextExtractor(
         PdfExtractionOptions? options,
         Func<ProcessStartInfo>? startInfoFactory,
         Action<int>? processStarted,
-        Action<PdfProcessObservation>? processObserved = null)
+        Action<PdfProcessObservation>? processObserved = null,
+        Func<Process, Task<bool>>? terminateAndReap = null)
     {
         this.options = options ?? new PdfExtractionOptions();
         if (this.options.Timeout < TimeSpan.Zero || this.options.Timeout > PdfExtractionOptions.MaximumTimeout)
@@ -32,6 +35,7 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
         this.startInfoFactory = startInfoFactory ?? CreateProductionStartInfo;
         this.processStarted = processStarted;
         this.processObserved = processObserved;
+        this.terminateAndReap = terminateAndReap ?? TerminateAndReapAsync;
     }
 
     public async Task<PdfTextExtractionOutcome> ExtractAsync(
@@ -78,11 +82,35 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
     {
         using var timeout = new CancellationTokenSource(options.Timeout);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(callerToken, timeout.Token);
-        using var process = new Process { StartInfo = startInfoFactory(), EnableRaisingEvents = true };
+        Process? process = null;
 
         try
         {
-            if (!process.Start()) return PdfTextExtractionOutcome.Failed(PdfExtractionFailure.ProcessingFailed);
+            process = new Process { StartInfo = startInfoFactory(), EnableRaisingEvents = true };
+            if (!process.Start())
+            {
+                process.Dispose();
+                return PdfTextExtractionOutcome.Failed(PdfExtractionFailure.ProcessingFailed);
+            }
+        }
+        catch
+        {
+            process?.Dispose();
+            return PdfTextExtractionOutcome.Failed(PdfExtractionFailure.ProcessingFailed);
+        }
+
+        using (process)
+        {
+            var terminationAttempted = false;
+
+            async Task<bool> EnsureTerminatedAsync()
+            {
+                terminationAttempted = true;
+                return await terminateAndReap(process);
+            }
+
+            try
+            {
             processStarted?.Invoke(process.Id);
 
             long peakWorkingSetBytes = 0;
@@ -107,25 +135,28 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
             }
             catch (OperationCanceledException)
             {
-                await TerminateAndReapAsync(process);
+                if (!await EnsureTerminatedAsync())
+                    return PdfTextExtractionOutcome.Failed(PdfExtractionFailure.ProcessingFailed);
                 return PdfTextExtractionOutcome.Failed(
                     callerToken.IsCancellationRequested ? PdfExtractionFailure.Cancelled : PdfExtractionFailure.TimedOut);
             }
             catch
             {
-                await TerminateAndReapAsync(process);
+                await EnsureTerminatedAsync();
                 return PdfTextExtractionOutcome.Failed(PdfExtractionFailure.ProcessingFailed);
             }
 
             if (callerToken.IsCancellationRequested)
             {
-                await TerminateAndReapAsync(process);
+                if (!await EnsureTerminatedAsync())
+                    return PdfTextExtractionOutcome.Failed(PdfExtractionFailure.ProcessingFailed);
                 return PdfTextExtractionOutcome.Failed(PdfExtractionFailure.Cancelled);
             }
 
             if (timeout.IsCancellationRequested || process.ExitCode != 0)
             {
-                await TerminateAndReapAsync(process);
+                if (!await EnsureTerminatedAsync())
+                    return PdfTextExtractionOutcome.Failed(PdfExtractionFailure.ProcessingFailed);
                 return PdfTextExtractionOutcome.Failed(
                     timeout.IsCancellationRequested ? PdfExtractionFailure.TimedOut : PdfExtractionFailure.ProcessingFailed);
             }
@@ -139,16 +170,17 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
         }
         catch (Win32Exception)
         {
-            await TerminateAndReapAsync(process);
+            await EnsureTerminatedAsync();
             return PdfTextExtractionOutcome.Failed(PdfExtractionFailure.ProcessingFailed);
         }
         finally
         {
             try
             {
-                if (!process.HasExited) await TerminateAndReapAsync(process);
+                if (!terminationAttempted && !process.HasExited) await EnsureTerminatedAsync();
             }
             catch (InvalidOperationException) { }
+        }
         }
     }
 
@@ -324,17 +356,35 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
         return value;
     }
 
-    private static async Task TerminateAndReapAsync(Process process)
+    internal static async Task<bool> TerminateAndReapAsync(Process process)
     {
         try
         {
             if (!process.HasExited) process.Kill(entireProcessTree: true);
         }
-        catch (InvalidOperationException) { }
-        catch (Win32Exception) { }
+        catch (InvalidOperationException)
+        {
+            if (!HasExited(process)) return false;
+        }
+        catch (Win32Exception)
+        {
+            if (!HasExited(process)) return false;
+        }
 
-        try { await process.WaitForExitAsync(CancellationToken.None); }
-        catch (InvalidOperationException) { }
+        try
+        {
+            using var reap = new CancellationTokenSource(ReapTimeout);
+            await process.WaitForExitAsync(reap.Token);
+            return HasExited(process);
+        }
+        catch (OperationCanceledException) { return false; }
+        catch (InvalidOperationException) { return HasExited(process); }
+    }
+
+    private static bool HasExited(Process process)
+    {
+        try { return process.HasExited; }
+        catch (InvalidOperationException) { return false; }
     }
 }
 

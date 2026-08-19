@@ -177,6 +177,22 @@ public sealed class PdfTextExtractorTests
     }
 
     [Fact]
+    public async Task Worker_start_info_failure_returns_safe_failure_and_releases_permit()
+    {
+        var extractor = new ContainedPdfTextExtractor(
+            null,
+            () => throw new InvalidOperationException("Synthetic missing worker."),
+            null);
+
+        var outcome = await extractor.ExtractAsync(SunflowerFixtureCorpus.CreateRepresentativePdf());
+
+        Assert.Equal("processing_failed", outcome.Failure?.Code);
+        var healthy = await new ContainedPdfTextExtractor().ExtractAsync(
+            SunflowerFixtureCorpus.CreateRepresentativePdf());
+        Assert.True(healthy.IsSuccess);
+    }
+
+    [Fact]
     public async Task Zero_timeout_terminates_real_worker()
     {
         int? pid = null;
@@ -185,6 +201,40 @@ public sealed class PdfTextExtractorTests
         var outcome = await extractor.ExtractAsync(SunflowerFixtureCorpus.CreateRepresentativePdf());
         Assert.Equal("timed_out", outcome.Failure?.Code);
         if (pid is not null) Assert.Throws<ArgumentException>(() => System.Diagnostics.Process.GetProcessById(pid.Value));
+    }
+
+    [Fact]
+    public async Task Unconfirmed_termination_maps_to_processing_failed_after_real_reap()
+    {
+        int? pid = null;
+        var extractor = new ContainedPdfTextExtractor(
+            new PdfExtractionOptions { Timeout = TimeSpan.Zero },
+            null,
+            value => pid = value,
+            null,
+            async process =>
+            {
+                Assert.True(await ContainedPdfTextExtractor.TerminateAndReapAsync(process));
+                return false;
+            });
+
+        var outcome = await extractor.ExtractAsync(SunflowerFixtureCorpus.CreateRepresentativePdf());
+
+        Assert.Equal("processing_failed", outcome.Failure?.Code);
+        Assert.NotNull(pid);
+        Assert.Throws<ArgumentException>(() => System.Diagnostics.Process.GetProcessById(pid!.Value));
+    }
+
+    [Fact]
+    public async Task Reaping_an_unstarted_process_fails_closed_without_blocking()
+    {
+        using var process = new System.Diagnostics.Process();
+        var startedAt = System.Diagnostics.Stopwatch.StartNew();
+
+        var reaped = await ContainedPdfTextExtractor.TerminateAndReapAsync(process);
+
+        Assert.False(reaped);
+        Assert.True(startedAt.Elapsed < TimeSpan.FromSeconds(1));
     }
 
     [Fact]

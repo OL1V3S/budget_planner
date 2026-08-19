@@ -45,10 +45,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["path", "reason"],
+        "required": ["path", "symbol", "reason"],
         "properties": {
           "path": { "type": "string" },
-          "symbol": { "type": "string" },
+          "symbol": { "type": ["string", "null"] },
           "reason": { "type": "string" }
         }
       }

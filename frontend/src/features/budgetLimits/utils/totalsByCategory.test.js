@@ -11,10 +11,10 @@ describe('monthly spending totals used by budgets', () => {
 
   it('includes the current month through the end of today and excludes future days', () => {
     const result = computeMonthlyTotalsByCategory([
-      { category: 'food', amount: 10.1, date: new Date(2026, 7, 1, 10).toISOString() },
-      { category: 'food', amount: 2.22, date: new Date(2026, 7, 14, 20).toISOString() },
-      { category: 'food', amount: 99, date: new Date(2026, 7, 15, 10).toISOString() },
-      { category: 'bills', amount: 50, date: new Date(2026, 6, 31, 10).toISOString() },
+      { category: 'food', amount: 10.1, date: '2026-08-01' },
+      { category: 'food', amount: 2.22, date: '2026-08-14' },
+      { category: 'food', amount: 99, date: '2026-08-15' },
+      { category: 'bills', amount: 50, date: '2026-07-31' },
     ], '2026-08')
 
     expect(result).toEqual({ food: 12.32 })
@@ -22,16 +22,16 @@ describe('monthly spending totals used by budgets', () => {
 
   it('returns no spending for a future selected month', () => {
     expect(computeMonthlyTotalsByCategory([
-      { category: 'food', amount: 10, date: new Date(2026, 8, 1).toISOString() },
+      { category: 'food', amount: 10, date: '2026-09-01' },
     ], '2026-09')).toEqual({})
   })
 
   it('includes the full historical month and groups by exact category key', () => {
     const result = computeMonthlyTotalsByCategory([
-      { category: 'food', amount: 1.115, date: new Date(2026, 6, 1).toISOString() },
-      { category: 'food', amount: 2.225, date: new Date(2026, 6, 31, 23).toISOString() },
-      { category: 'Food', amount: 4, date: new Date(2026, 6, 20).toISOString() },
-      { category: '', amount: 3, date: new Date(2026, 6, 20).toISOString() },
+      { category: 'food', amount: 1.115, date: '2026-07-01' },
+      { category: 'food', amount: 2.225, date: '2026-07-31' },
+      { category: 'Food', amount: 4, date: '2026-07-20' },
+      { category: '', amount: 3, date: '2026-07-20' },
     ], '2026-07')
 
     expect(result).toEqual({ food: 3.35, Food: 4, Uncategorized: 3 })

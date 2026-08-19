@@ -4,5 +4,5 @@ public sealed record ExpenseResponse(
     int Id,
     string Description,
     decimal Amount,
-    DateTime Date,
+    DateOnly Date,
     string Category);

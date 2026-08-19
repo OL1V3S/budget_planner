@@ -99,7 +99,7 @@ export default function TransactionsPage() {
     setEditingExpenseData({
       description: expense.description || "",
       amount: Number(expense.amount ?? 0).toFixed(2),
-      date: expense.date ? String(expense.date).slice(0, 10) : "",
+      date: expense.date || "",
       category: categoryIsDefault ? normalizeText(currentCategory) : "other",
       customCategory: categoryIsDefault ? "" : currentCategory,
     });

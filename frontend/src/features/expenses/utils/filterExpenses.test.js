@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { filterExpenses } from './filterExpenses'
 
 const expenses = [
-  { id: 1, description: 'Coffee Shop', category: 'food', date: '2026-08-14T12:00:00Z' },
-  { id: 2, description: 'Monthly Pass', category: 'transport', date: '2026-08-07T12:00:00Z' },
-  { id: 3, description: 'Electric Bill', category: 'bills', date: '2026-07-15T12:00:00Z' },
-  { id: 4, description: 'Prescription', category: 'medical', date: '2026-08-01T12:00:00Z' },
-  { id: 5, description: 'Old Concert', category: 'entertainment', date: '2026-06-01T12:00:00Z' },
+  { id: 1, description: 'Coffee Shop', category: 'food', date: '2026-08-14' },
+  { id: 2, description: 'Monthly Pass', category: 'transport', date: '2026-08-07' },
+  { id: 3, description: 'Electric Bill', category: 'bills', date: '2026-07-15' },
+  { id: 4, description: 'Prescription', category: 'medical', date: '2026-08-01' },
+  { id: 5, description: 'Old Concert', category: 'entertainment', date: '2026-06-01' },
 ]
 
 const baseFilters = {
@@ -37,7 +37,7 @@ describe('expense filtering', () => {
   it('uses case-sensitive default-category membership for the Other filter', () => {
     const result = filterExpenses([
       ...expenses,
-      { id: 6, description: 'Capitalized category', category: 'Food', date: '2026-08-10T12:00:00Z' },
+      { id: 6, description: 'Capitalized category', category: 'Food', date: '2026-08-10' },
     ], { ...baseFilters, categoryFilter: 'Other' })
 
     expect(result.map((x) => x.id)).toEqual([1, 2, 3, 4, 5])
@@ -51,7 +51,7 @@ describe('expense filtering', () => {
     expect(filterExpenses(expenses, { ...baseFilters, dateFilter }).map((x) => x.id)).toEqual(expectedIds)
   })
 
-  it('interprets custom date endpoints at midnight', () => {
+  it('includes both custom calendar-date endpoints', () => {
     const result = filterExpenses(expenses, {
       ...baseFilters,
       dateFilter: 'custom',
@@ -59,6 +59,6 @@ describe('expense filtering', () => {
       customEndDate: '2026-08-07',
     })
 
-    expect(result.map((x) => x.id)).toEqual([4])
+    expect(result.map((x) => x.id)).toEqual([2, 4])
   })
 })

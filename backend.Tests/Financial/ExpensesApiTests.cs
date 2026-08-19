@@ -57,7 +57,7 @@ public sealed class ExpensesApiTests
         {
             description = "  Mixed   CASE  ",
             amount = 42.25m,
-            date = "2026-08-15T12:30:00",
+            date = "2026-08-15",
             category = "  Food   And   Dining  ",
             userId = other.Id
         });
@@ -76,8 +76,25 @@ public sealed class ExpensesApiTests
         Assert.Equal(owner.Id, persisted.UserId);
         Assert.Equal("Mixed   CASE", persisted.Description);
         Assert.Equal("food and dining", persisted.Category);
-        Assert.Equal(DateTimeKind.Utc, persisted.Date.Kind);
-        Assert.Equal(new DateTime(2026, 8, 15, 12, 30, 0, DateTimeKind.Utc), persisted.Date);
+        Assert.Equal(new DateOnly(2026, 8, 15), persisted.Date);
+        Assert.Equal("2026-08-15", body.GetProperty("date").GetString());
+    }
+
+    [Fact]
+    public async Task Create_rejects_timestamp_shaped_expense_date()
+    {
+        await using var app = new FinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("owner@example.com");
+
+        var response = await owner.Client.PostAsJsonAsync("/api/expenses", new
+        {
+            description = "timestamp date",
+            amount = 1m,
+            date = "2026-08-15T00:00:00Z",
+            category = "food"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Theory]
@@ -272,7 +289,7 @@ public sealed class ExpensesApiTests
             id = expense.Id,
             description = "  Updated   Description  ",
             amount = 4.50m,
-            date = "2026-09-03T09:45:00",
+            date = "2026-09-03",
             category = " HOME   Supplies "
         });
 
@@ -283,8 +300,7 @@ public sealed class ExpensesApiTests
         Assert.Equal(4.50m, persisted.Amount);
         Assert.Equal("home supplies", persisted.Category);
         Assert.Equal(owner.Id, persisted.UserId);
-        Assert.Equal(DateTimeKind.Utc, persisted.Date.Kind);
-        Assert.Equal(new DateTime(2026, 9, 3, 9, 45, 0, DateTimeKind.Utc), persisted.Date);
+        Assert.Equal(new DateOnly(2026, 9, 3), persisted.Date);
     }
 
     [Fact]

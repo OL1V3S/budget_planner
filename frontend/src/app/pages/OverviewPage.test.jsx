@@ -18,9 +18,9 @@ describe('Overview current-month summary', () => {
     vi.setSystemTime(new Date(2026, 7, 14, 12, 0, 0))
     useExpenses.mockReturnValue({
       expenses: [
-        { category: 'food', amount: 90, date: new Date(2026, 7, 2).toISOString() },
-        { category: 'Food', amount: 10, date: new Date(2026, 7, 3).toISOString() },
-        { category: 'food', amount: 500, date: new Date(2026, 7, 15).toISOString() },
+        { category: 'food', amount: 90, date: '2026-08-02' },
+        { category: 'Food', amount: 10, date: '2026-08-03' },
+        { category: 'food', amount: 500, date: '2026-08-15' },
       ],
       loading: false,
     })
@@ -66,7 +66,7 @@ describe('Overview current-month summary', () => {
 
   it('keeps expense metrics useful and explains when no limits exist', () => {
     useExpenses.mockReturnValue({
-      expenses: [{ category: 'food', amount: 12.34, date: new Date(2026, 7, 2).toISOString() }],
+      expenses: [{ category: 'food', amount: 12.34, date: '2026-08-02' }],
       loading: false,
     })
     useBudgetLimits.mockReturnValue({ budgetLimits: [], loading: false })

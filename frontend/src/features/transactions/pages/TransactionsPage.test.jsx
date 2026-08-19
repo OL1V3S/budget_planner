@@ -68,7 +68,7 @@ describe('existing expense workflows', () => {
         id: 42,
         description: 'old name',
         amount: 12,
-        date: '2026-08-10T00:00:00Z',
+        date: '2026-08-10',
         category: 'medical',
       }],
     })
@@ -109,7 +109,7 @@ describe('existing expense workflows', () => {
         id: index + 1,
         description: `expense ${index + 1}`,
         amount: index + 1,
-        date: '2026-08-01T00:00:00Z',
+        date: '2026-08-01',
         category: 'food',
       })),
     })

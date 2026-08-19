@@ -369,71 +369,155 @@ If implementation requires work outside the authorized issue:
 
 Do not silently expand into adjacent roadmap work.
 
-## ChatGPT-to-Codex execution bridge
+## ChatGPT command center and local Codex execution
 
-When `.github/workflows/codex-agent.yml` is configured and available, normal
-repository audits, plans, implementations, and review corrections should use the
-GitHub-native Codex bridge rather than having ChatGPT directly manufacture
-application-code commits through raw repository file writes. Direct ChatGPT
-writes remain appropriate for small GitHub administration and an explicitly
-approved bootstrap/emergency exception.
+The normal Budget Planner engineering workflow uses **local Codex in the
+ChatGPT desktop app**, authenticated with the repository owner's ChatGPT
+account, as the repository execution agent. GitHub remains the durable source
+of truth for task scope, pull requests, CI evidence, and merge state.
 
-The human and ChatGPT remain the product/engineering command center: discuss
-product direction, select the task, record the GitHub Issue, resolve ambiguity,
-and provide the approvals required by the risk gates above. Codex owns the
-actual repository engineering execution after that authority is established.
+Do not assume that an API-key GitHub Actions Codex bridge is the normal
+execution path. Repository engineering should not require `OPENAI_API_KEY` or a
+publisher GitHub App unless a future issue explicitly authorizes a different
+integration.
 
-Owner-authored bridge commands are:
+The human and ChatGPT are the product/engineering command center. They own:
 
-- `/codex plan` — read-only engineering plan;
-- `/codex audit` — read-only bounded audit;
-- `/codex implement` — authorized implementation;
-- `/codex fix` — bounded correction on an existing PR branch.
+- product discussion and priority;
+- selecting or creating the governing GitHub Issue;
+- resolving ambiguity and defining acceptance criteria;
+- risk classification and required approvals;
+- recording durable plan/approval state when MEDIUM/HIGH gates require it;
+- independent review of the resulting GitHub PR and CI evidence.
 
-ChatGPT prepares the structured task packet and posts these commands; the human
-should not need to copy prompts into an IDE during the normal workflow.
+Codex owns repository engineering execution after that authority is established:
+
+- inspect the local checkout;
+- plan when the risk gate requires a plan;
+- implement within the authorized scope;
+- run available verification;
+- create intentional commits;
+- push the feature/PR branch and open a draft PR when publication tooling is
+  available;
+- address bounded review corrections on the existing PR branch.
+
+The human repository owner remains the sole merge authority.
+
+### Minimal human handoff
+
+The human should not act as a prompt/message bus between ChatGPT and Codex.
+Product decisions, constraints, acceptance criteria, and approvals belong in the
+GitHub Issue and canonical repository documents so Codex can retrieve them from
+durable state.
+
+For an already-authorized task, the normal Codex handoff should be no more than
+an issue reference, for example:
+
+```text
+Work on Budget Planner issue #57. Follow AGENTS.md and the issue exactly.
+```
+
+For MEDIUM/HIGH work that has not yet passed its approval gate, use the same
+issue-reference handoff for inspection/planning only. After the human approves
+the plan and ChatGPT records that approval durably on the governing issue, the
+implementation handoff may be similarly short, for example:
+
+```text
+Implement the approved plan for Budget Planner issue #57. Follow AGENTS.md and the issue exactly.
+```
+
+If Codex cannot retrieve the governing issue or required authority document,
+stop and report that access gap rather than asking the human to reconstruct the
+task from memory or guessing the missing scope.
 
 ### Repository Context Pruning
 
-`/codex plan` and `/codex audit` must use pruned context by default. A separate
-trusted preparation step provides Codex only:
+Use **pruned by default, expand only with a concrete reason** even though local
+Codex has a full repository checkout.
 
-- a lightweight tracked-path and symbol map;
-- the exact targeted raw files selected from the approved UX/scope discussion;
-- the allowed canonical authority documents; and
-- the fixed task packet/prompt wrapper.
+At the start of inspection/planning:
 
-Codex must not silently fall back to a full-repository raw read. If the supplied
-context cannot resolve a concrete dependency, contract, call path, test
-boundary, security rule, or financial invariant, stop and request the smallest
-specific path/symbol expansion and explain why it is needed.
+1. read `AGENTS.md`, the governing issue, and only the canonical authority docs
+   relevant to that task;
+2. use `.github/scripts/build_repo_map.py` when a structural overview would help
+   locate the narrow implementation boundary without reading raw files broadly;
+3. inspect the exact files/symbols most likely to own the requested behavior;
+4. expand to additional files only when a concrete dependency, contract, call
+   path, test boundary, security rule, or financial invariant requires it;
+5. record material context expansions and their reasons in the plan/final report.
 
-Implementation and fix runs have a real checkout so they can compile and test,
-but they still start from the structural map, targeted files, and approved plan
-where applicable. Additional reads should be limited to concrete discovered
-dependencies and recorded in the final report. Changed paths are mechanically
-restricted by the task packet.
+Do not perform broad raw-repository scans merely for convenience. Do not read
+large generated files or lockfiles unless the task specifically requires them.
+If the targeted context is insufficient, request or inspect the smallest
+specific additional path/symbol needed rather than silently broadening scope.
 
-### Approval, publication, and review separation
+A lightweight structural map can be generated locally with:
 
-For MEDIUM/HIGH implementation, the human approval marker must be bound to the
-exact Codex read-only result and base commit. A changed plan or stale base is not
-a valid approval. LOW work may proceed under the LOW authority above once the
-task is explicitly selected.
+```bash
+python3 .github/scripts/build_repo_map.py --root . --output /tmp/budget-planner-repo-map.txt
+```
 
-Ordinary review corrections on an already approved PR do not require a second
-product-risk approval when they stay within the original issue and bounded
-review finding. Scope-expanding corrections must return to normal planning and
-approval instead of using `/codex fix` as an authority bypass.
+The map is navigation context only; canonical repository files and executable
+behavior remain authoritative.
 
-Codex execution receives no GitHub publication credential. A separate fresh
-publication job applies the accepted patch, revalidates the allowed paths and
-base/PR state, and creates or updates a draft PR using the dedicated
-least-privilege publisher GitHub App. Codex may never merge, push to `main`, or
-perform a production operation.
+### Risk approvals in the local-Codex workflow
 
-Codex's own test results are development evidence only. Existing applicable
-Frontend, Backend, PostgreSQL, Vercel, and Codex bridge policy CI remain the
-independent proof layer. After those checks succeed, ChatGPT reviews the actual
-PR/diff and CI evidence. The human repository owner remains the sole merge
-authority.
+LOW work may proceed after the task is explicitly selected under the LOW
+authority above.
+
+For MEDIUM work, Codex must inspect and produce the concise plan required by the
+risk gate, then stop. Implementation begins only after explicit human approval.
+
+For HIGH work, Codex must inspect only and provide the required plan, risks,
+rollback considerations, and verification plan, then stop. Implementation
+begins only after explicit human approval. A separate explicit authorization is
+still required for production migrations or other high-risk production
+operations.
+
+When ChatGPT is acting as command center, it should record the approved plan and
+human approval on the governing GitHub Issue before sending the short
+implementation handoff. A materially changed plan, changed financial/security
+semantics, or broadened scope requires renewed approval rather than inheriting
+an earlier approval by implication.
+
+### Local execution and GitHub publication
+
+Local execution does not make the work local-only. The intended publication
+path is:
+
+```text
+local Codex checkout
+-> feature/PR branch
+-> intentional commit(s)
+-> push branch to GitHub
+-> draft pull request
+-> independent GitHub CI
+-> ChatGPT review of actual PR + CI
+-> human merge
+```
+
+Codex must never push directly to `main`, merge a pull request, deploy, apply a
+production migration, or perform destructive production/data operations.
+
+If Codex can safely authenticate to GitHub, it may push the approved branch and
+open the draft PR itself. If push or PR tooling is unavailable, stop at a clean
+local commit and use the existing **publication handoff required** fallback.
+GitHub Desktop/web publication is an acceptable fallback; it does not weaken CI,
+review, or merge requirements.
+
+### Independent review and corrections
+
+Codex's local test/build results are development evidence, not the independent
+proof layer. Existing applicable Frontend, Backend, PostgreSQL, Vercel, and
+other repository CI checks remain authoritative for review-ready status.
+
+After the draft PR exists and required CI succeeds, ChatGPT should inspect the
+actual PR diff, review discussion, and CI state rather than accepting Codex's
+summary as proof.
+
+If ChatGPT or another reviewer finds a bounded defect, Codex should remain on
+the existing PR branch and make only the smallest correction required. The
+short handoff may reference the PR/review finding instead of restating the
+entire task. Scope-expanding corrections return to normal planning and approval.
+
+Human review and merge authority remain unchanged.

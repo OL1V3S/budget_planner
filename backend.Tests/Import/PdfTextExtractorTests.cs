@@ -1,11 +1,16 @@
 using BudgetPlanner.Import;
 using BudgetPlanner.Tests.Import.Fixtures.Sunflower;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace BudgetPlanner.Tests.Import;
 
 public sealed class PdfTextExtractorTests
 {
+    private readonly ITestOutputHelper output;
+
+    public PdfTextExtractorTests(ITestOutputHelper output) => this.output = output;
+
     [Fact]
     public async Task Representative_pdf_extracts_ordered_pages()
     {
@@ -71,6 +76,92 @@ public sealed class PdfTextExtractorTests
         var outcome = await new ContainedPdfTextExtractor().ExtractAsync(ParserSpecificPdfFixtures.ActiveContentPdf());
         Assert.True(outcome.IsSuccess);
         Assert.Contains("SAFE SYNTHETIC TEXT", outcome.Result!.Pages.Single().Text);
+    }
+
+    [Fact]
+    public async Task Flate_compressed_text_uses_real_parser_path()
+    {
+        var outcome = await new ContainedPdfTextExtractor().ExtractAsync(
+            ParserSpecificPdfFixtures.CompressedTextPdf(10));
+        Assert.True(outcome.IsSuccess);
+        Assert.Equal(10, outcome.Result!.CharacterCount);
+    }
+
+    [Fact]
+    public async Task Real_worker_compressed_memory_pressure_fails_closed_and_recovers()
+    {
+        var pressurePdf = ParserSpecificPdfFixtures.CompressedTextPdf(1_000_000);
+        Assert.True(pressurePdf.Length < 10 * 1024 * 1024);
+
+        for (var iteration = 0; iteration < 2; iteration++)
+        {
+            int? pid = null;
+            var extractor = new ContainedPdfTextExtractor(
+                null,
+                () =>
+                {
+                    var info = ContainedPdfTextExtractor.CreateProductionStartInfo();
+                    info.Environment["DOTNET_GCHeapHardLimit"] = "2000000";
+                    return info;
+                },
+                value => pid = value);
+
+            var outcome = await extractor.ExtractAsync(pressurePdf);
+
+            Assert.Equal("processing_failed", outcome.Failure?.Code);
+            Assert.NotNull(pid);
+            Assert.Throws<ArgumentException>(() => System.Diagnostics.Process.GetProcessById(pid!.Value));
+        }
+
+        var healthy = await new ContainedPdfTextExtractor().ExtractAsync(
+            SunflowerFixtureCorpus.CreateRepresentativePdf());
+        Assert.True(healthy.IsSuccess);
+    }
+
+    [Fact]
+    public async Task Valid_boundary_fixtures_record_sanitized_memory_envelope()
+    {
+        var fixtures = new (string Name, byte[] Pdf)[]
+        {
+            ("representative-four-page", SunflowerFixtureCorpus.CreateRepresentativePdf()),
+            ("twenty-five-page", ParserSpecificPdfFixtures.PageCountPdf(25)),
+            ("two-million-character", ParserSpecificPdfFixtures.TextVolumePdf(2_000_000))
+        };
+
+        foreach (var fixture in fixtures)
+        {
+            PdfProcessObservation? observation = null;
+            var extractor = new ContainedPdfTextExtractor(
+                null,
+                () =>
+                {
+                    var info = ContainedPdfTextExtractor.CreateProductionStartInfo();
+                    info.Environment["BUDGETPLANNER_PDF_WORKER_TEST_METRICS"] = "1";
+                    return info;
+                },
+                null,
+                value => observation = value);
+
+            var outcome = await extractor.ExtractAsync(fixture.Pdf);
+
+            Assert.True(outcome.IsSuccess);
+            Assert.NotNull(observation);
+            Assert.Equal(128L * 1024 * 1024, observation.Value.StartupTotalAvailableBytes);
+            Assert.InRange(observation.Value.MaxTotalCommittedBytes, 1, 128L * 1024 * 1024);
+            Assert.InRange(observation.Value.MaxHeapSizeBytes, 1, 128L * 1024 * 1024);
+            Assert.InRange(observation.Value.PostCollectionLiveBytes, 1, 128L * 1024 * 1024);
+            Assert.True(observation.Value.PeakWorkingSetBytes > 0);
+            output.WriteLine(
+                "{0}: available={1}, committed={2}, heap={3}, live-no-gc={4}, cumulative={5}, live-post-gc={6}, working-set={7} bytes",
+                fixture.Name,
+                observation.Value.StartupTotalAvailableBytes,
+                observation.Value.MaxTotalCommittedBytes,
+                observation.Value.MaxHeapSizeBytes,
+                observation.Value.MaxLiveBytes,
+                observation.Value.MaxCumulativeAllocatedBytes,
+                observation.Value.PostCollectionLiveBytes,
+                observation.Value.PeakWorkingSetBytes);
+        }
     }
 
     [Fact]

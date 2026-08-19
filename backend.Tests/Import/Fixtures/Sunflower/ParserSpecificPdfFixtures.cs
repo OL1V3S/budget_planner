@@ -42,4 +42,53 @@ internal static class ParserSpecificPdfFixtures
         return SyntheticPdfBuilder.Build(pages);
     }
 
+    public static byte[] CompressedTextPdf(int characters)
+    {
+        using var compressed = new MemoryStream();
+        using (var zlib = new System.IO.Compression.ZLibStream(
+            compressed, System.IO.Compression.CompressionLevel.SmallestSize, leaveOpen: true))
+        {
+            zlib.Write("BT\n/F1 10 Tf\n50 760 Td\n("u8);
+            var block = new byte[8 * 1024];
+            Array.Fill(block, (byte)'X');
+            while (characters >= block.Length)
+            {
+                zlib.Write(block);
+                characters -= block.Length;
+            }
+            if (characters > 0) zlib.Write(block, 0, characters);
+            zlib.Write(") Tj\nET\n"u8);
+        }
+
+        var encoded = Convert.ToHexString(compressed.ToArray()) + ">";
+        var objects = new SortedDictionary<int, string>
+        {
+            [1] = "<< /Type /Catalog /Pages 2 0 R >>",
+            [2] = "<< /Type /Pages /Kids [4 0 R] /Count 1 >>",
+            [3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            [4] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>",
+            [5] = $"<< /Length {encoded.Length} /Filter [/ASCIIHexDecode /FlateDecode] >>\nstream\n{encoded}\nendstream"
+        };
+        var output = new System.Text.StringBuilder();
+        var offsets = new int[6];
+        var byteOffset = 0;
+        void Append(string value)
+        {
+            output.Append(value);
+            byteOffset += System.Text.Encoding.ASCII.GetByteCount(value);
+        }
+
+        Append("%PDF-1.4\n% synthetic compressed text fixture\n");
+        foreach (var entry in objects)
+        {
+            offsets[entry.Key] = byteOffset;
+            Append($"{entry.Key} 0 obj\n{entry.Value}\nendobj\n");
+        }
+        var xref = byteOffset;
+        Append("xref\n0 6\n0000000000 65535 f \n");
+        for (var number = 1; number <= 5; number++) Append($"{offsets[number]:D10} 00000 n \n");
+        Append($"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n");
+        return System.Text.Encoding.ASCII.GetBytes(output.ToString());
+    }
+
 }

@@ -12,14 +12,16 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
     private readonly PdfExtractionOptions options;
     private readonly Func<ProcessStartInfo> startInfoFactory;
     private readonly Action<int>? processStarted;
+    private readonly Action<PdfProcessObservation>? processObserved;
 
     public ContainedPdfTextExtractor(PdfExtractionOptions? options = null)
-        : this(options, null, null) { }
+        : this(options, null, null, null) { }
 
     internal ContainedPdfTextExtractor(
         PdfExtractionOptions? options,
         Func<ProcessStartInfo>? startInfoFactory,
-        Action<int>? processStarted)
+        Action<int>? processStarted,
+        Action<PdfProcessObservation>? processObserved = null)
     {
         this.options = options ?? new PdfExtractionOptions();
         if (this.options.Timeout < TimeSpan.Zero || this.options.Timeout > PdfExtractionOptions.MaximumTimeout)
@@ -29,6 +31,7 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
 
         this.startInfoFactory = startInfoFactory ?? CreateProductionStartInfo;
         this.processStarted = processStarted;
+        this.processObserved = processObserved;
     }
 
     public async Task<PdfTextExtractionOutcome> ExtractAsync(
@@ -82,6 +85,15 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
             if (!process.Start()) return PdfTextExtractionOutcome.Failed(PdfExtractionFailure.ProcessingFailed);
             processStarted?.Invoke(process.Id);
 
+            long peakWorkingSetBytes = 0;
+            using var sampling = processObserved is null ? null : new CancellationTokenSource();
+            var sampleTask = sampling is null
+                ? Task.CompletedTask
+                : SampleWorkingSetAsync(
+                    process,
+                    value => peakWorkingSetBytes = Math.Max(peakWorkingSetBytes, value),
+                    sampling.Token);
+
             var writeTask = WriteRequestAsync(process.StandardInput.BaseStream, pdf, linked.Token);
             var outputTask = ReadBoundedAsync(process.StandardOutput.BaseStream, PdfWorkerProtocol.MaxResponseBytes, linked.Token);
             var errorTask = ReadBoundedAsync(process.StandardError.BaseStream, PdfWorkerProtocol.MaxErrorBytes, linked.Token);
@@ -90,6 +102,8 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
             try
             {
                 await Task.WhenAll(writeTask, outputTask, errorTask, exitTask);
+                sampling?.Cancel();
+                await sampleTask;
             }
             catch (OperationCanceledException)
             {
@@ -116,6 +130,11 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
                     timeout.IsCancellationRequested ? PdfExtractionFailure.TimedOut : PdfExtractionFailure.ProcessingFailed);
             }
 
+            if (processObserved is not null && TryReadManagedMetric(errorTask.Result, peakWorkingSetBytes, out var observation))
+            {
+                processObserved(observation);
+            }
+
             return ParseResponse(outputTask.Result, pdf.Length);
         }
         catch (Win32Exception)
@@ -131,6 +150,39 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
             }
             catch (InvalidOperationException) { }
         }
+    }
+
+    private static async Task SampleWorkingSetAsync(Process process, Action<long> sample, CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested && !process.HasExited)
+            {
+                process.Refresh();
+                sample(process.WorkingSet64);
+                await Task.Delay(2, token);
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (InvalidOperationException) { }
+    }
+
+    private static bool TryReadManagedMetric(
+        byte[] stderr,
+        long peakWorkingSetBytes,
+        out PdfProcessObservation observation)
+    {
+        const string prefix = "BPDFMETRIC ";
+        observation = default;
+        var text = Encoding.ASCII.GetString(stderr);
+        if (!text.StartsWith(prefix, StringComparison.Ordinal)) return false;
+        var values = text[prefix.Length..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (values.Length != 6 || values.Any(value => !long.TryParse(value, out _))) return false;
+        var parsed = values.Select(long.Parse).ToArray();
+        if (parsed.Any(value => value <= 0)) return false;
+        observation = new PdfProcessObservation(
+            parsed[0], parsed[1], parsed[2], parsed[3], parsed[4], parsed[5], peakWorkingSetBytes);
+        return true;
     }
 
     internal static ProcessStartInfo CreateProductionStartInfo()
@@ -285,3 +337,12 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
         catch (InvalidOperationException) { }
     }
 }
+
+internal readonly record struct PdfProcessObservation(
+    long StartupTotalAvailableBytes,
+    long MaxTotalCommittedBytes,
+    long MaxHeapSizeBytes,
+    long MaxLiveBytes,
+    long MaxCumulativeAllocatedBytes,
+    long PostCollectionLiveBytes,
+    long PeakWorkingSetBytes);

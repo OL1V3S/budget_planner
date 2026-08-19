@@ -58,6 +58,14 @@ static async Task<int> RunAsync()
 
 static async Task<int> ExtractAsync(byte[] pdf, Stream output)
 {
+    var metricsEnabled = TestMetricsEnabled();
+    var startupAvailableBytes = metricsEnabled ? GC.GetGCMemoryInfo().TotalAvailableMemoryBytes : 0;
+    long maxCommittedBytes = 0;
+    long maxHeapSizeBytes = 0;
+    long maxLiveBytes = 0;
+    long maxCumulativeAllocatedBytes = 0;
+    long postCollectionLiveBytes = 0;
+    if (metricsEnabled) ObserveGc();
     try
     {
         var options = new ParsingOptions
@@ -67,6 +75,7 @@ static async Task<int> ExtractAsync(byte[] pdf, Stream output)
         };
 
         using var document = PdfDocument.Open(pdf, options);
+        if (metricsEnabled) ObserveGc();
         if (document.IsEncrypted)
         {
             await PdfWorkerProtocol.WriteFailureAsync(output, WorkerResultKind.EncryptedPdf);
@@ -93,6 +102,7 @@ static async Task<int> ExtractAsync(byte[] pdf, Stream output)
         for (var pageNumber = 1; pageNumber <= document.NumberOfPages; pageNumber++)
         {
             var text = document.GetPage(pageNumber).Text;
+            if (metricsEnabled) ObserveGc();
             var nextCharacters = checked(characters + text.Length);
             var nextUtf8Bytes = checked(utf8Bytes + utf8.GetByteCount(text));
             if (nextCharacters > PdfWorkerProtocol.MaxCharacters || nextUtf8Bytes > PdfWorkerProtocol.MaxUtf8Bytes)
@@ -114,6 +124,18 @@ static async Task<int> ExtractAsync(byte[] pdf, Stream output)
         }
 
         await PdfWorkerProtocol.WriteSuccessAsync(output, pdf.Length, pages);
+        if (metricsEnabled)
+        {
+            postCollectionLiveBytes = GC.GetTotalMemory(true);
+            ObserveGc();
+            WriteTestMetric(
+                startupAvailableBytes,
+                maxCommittedBytes,
+                maxHeapSizeBytes,
+                maxLiveBytes,
+                maxCumulativeAllocatedBytes,
+                postCollectionLiveBytes);
+        }
         return 0;
     }
     catch (PdfDocumentEncryptedException)
@@ -131,7 +153,34 @@ static async Task<int> ExtractAsync(byte[] pdf, Stream output)
         await PdfWorkerProtocol.WriteFailureAsync(output, WorkerResultKind.InvalidPdf);
         return 0;
     }
+
+    void ObserveGc()
+    {
+        var info = GC.GetGCMemoryInfo();
+        maxCommittedBytes = Math.Max(maxCommittedBytes, info.TotalCommittedBytes);
+        maxHeapSizeBytes = Math.Max(maxHeapSizeBytes, info.HeapSizeBytes);
+        maxLiveBytes = Math.Max(maxLiveBytes, GC.GetTotalMemory(false));
+        maxCumulativeAllocatedBytes = Math.Max(maxCumulativeAllocatedBytes, GC.GetTotalAllocatedBytes(false));
+    }
 }
+
+static void WriteTestMetric(
+    long startupAvailableBytes,
+    long maxCommittedBytes,
+    long maxHeapSizeBytes,
+    long maxLiveBytes,
+    long maxCumulativeAllocatedBytes,
+    long postCollectionLiveBytes)
+{
+    if (TestMetricsEnabled())
+    {
+        Console.Error.Write(
+            $"BPDFMETRIC {startupAvailableBytes} {maxCommittedBytes} {maxHeapSizeBytes} {maxLiveBytes} {maxCumulativeAllocatedBytes} {postCollectionLiveBytes}");
+    }
+}
+
+static bool TestMetricsEnabled() =>
+    Environment.GetEnvironmentVariable("BUDGETPLANNER_PDF_WORKER_TEST_METRICS") == "1";
 
 static async Task<bool> ReadExactlyAsync(Stream input, Memory<byte> buffer)
 {

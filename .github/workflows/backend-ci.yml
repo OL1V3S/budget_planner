@@ -35,6 +35,20 @@ jobs:
           --no-restore
           --filter "Category!=PostgreSQL"
 
+      - name: Publish backend with contained PDF worker
+        run: dotnet publish backend/backend.csproj --configuration Release --no-restore --output "$RUNNER_TEMP/backend-publish"
+
+      - name: Verify contained PDF worker artifact
+        shell: bash
+        run: |
+          worker="$RUNNER_TEMP/backend-publish/PdfWorker/backend.PdfWorker"
+          test -x "$worker"
+          test -f "$RUNNER_TEMP/backend-publish/PdfWorker/backend.PdfWorker.deps.json"
+          test -f "$RUNNER_TEMP/backend-publish/PdfWorker/backend.PdfWorker.runtimeconfig.json"
+          find "$RUNNER_TEMP/backend-publish/PdfWorker" -maxdepth 1 -name 'UglyToad.PdfPig*.dll' -print -quit | grep -q .
+          DOTNET_GCHeapHardLimit=8000000 "$worker" </dev/null >"$RUNNER_TEMP/worker-smoke.bin"
+          test "$(wc -c <"$RUNNER_TEMP/worker-smoke.bin")" -eq 6
+
   postgresql-integration:
     name: PostgreSQL financial integration
     runs-on: ubuntu-latest

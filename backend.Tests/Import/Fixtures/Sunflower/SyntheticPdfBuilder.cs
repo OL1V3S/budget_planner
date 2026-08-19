@@ -4,7 +4,7 @@ namespace BudgetPlanner.Tests.Import.Fixtures.Sunflower;
 
 internal static class SyntheticPdfBuilder
 {
-    public static byte[] Build(IReadOnlyList<IReadOnlyList<string>> pages)
+    public static byte[] Build(IReadOnlyList<IReadOnlyList<string>> pages, string catalogAdditions = "")
     {
         ArgumentNullException.ThrowIfNull(pages);
 
@@ -25,7 +25,7 @@ internal static class SyntheticPdfBuilder
             pageObjectNumbers.Add(4 + (index * 2));
         }
 
-        objects[catalogObject] = "<< /Type /Catalog /Pages 2 0 R >>";
+        objects[catalogObject] = $"<< /Type /Catalog /Pages 2 0 R {catalogAdditions} >>";
         objects[pagesObject] =
             $"<< /Type /Pages /Kids [{string.Join(" ", pageObjectNumbers.Select(number => $"{number} 0 R"))}] /Count {pages.Count} >>";
         objects[fontObject] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";

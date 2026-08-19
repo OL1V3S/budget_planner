@@ -52,6 +52,15 @@ The intended dependency direction is HTTP boundary to application/service and
 persistence concerns, with database access remaining behind the API. Keep this
 structure appropriately simple; new layers require a demonstrated need.
 
+`backend/Import/` contains the bounded PDF-to-text application boundary. Its
+private `backend.PdfWorker` child process is packaged inside the backend publish
+artifact and exists only for one extraction call. The worker has no endpoint,
+independent deployment, data store, or service identity; it receives one bounded
+binary stdin frame and returns one bounded stdout frame. The parent backend owns
+admission, fixed limits, stable errors, timeout/cancellation, process kill/reap,
+and environment scrubbing. This is a narrow containment boundary for untrusted
+PDF parsing, not general subprocess infrastructure.
+
 ### Authentication and ownership boundaries
 
 ASP.NET Core Identity manages users, JWT bearer authentication establishes the
@@ -82,16 +91,18 @@ apply production migrations.
 
 ## Approved and planned extension points
 
-Sunflower statement import is a planned future capability, not current
-architecture. Its approved untrusted-document security and privacy boundary is
+Sunflower statement upload, row parsing, preview, confirmation, and persistence
+remain planned future capabilities. The bounded PDF text extractor is current
+private backend infrastructure but is not exposed by an endpoint. Its approved
+untrusted-document security and privacy boundary is
 defined in [`docs/import-threat-model.md`](docs/import-threat-model.md), and its
 approved V1 normalized financial-processing and review pipeline is defined in
 [`docs/import-pipeline.md`](docs/import-pipeline.md).
 
-Future implementation may add an import boundary that parses supported
-untrusted statement input, normalizes it into reviewed bank-neutral rows, and
+Future implementation may extend the import boundary to parse supported
+extracted statement text, normalize it into reviewed bank-neutral rows, and
 persists only explicitly confirmed valid expense candidates through the
-authoritative backend financial write boundary. Parser selection, runtime/API/UI
+authoritative backend financial write boundary. Sunflower row parsing, API/UI
 implementation, import storage/schema design, and any required migrations remain
 future scoped work. Imported expense persistence remains blocked until the
 applicable approved date-only semantics are implemented and verified.

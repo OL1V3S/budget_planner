@@ -31,11 +31,23 @@ public sealed class PdfTextExtractorTests
     [Theory]
     [InlineData("invalid")]
     [InlineData("image")]
+    [InlineData("encrypted")]
     public async Task Unsafe_or_unsupported_pdf_fails_closed(string kind)
     {
-        var pdf = kind == "invalid" ? ParserSpecificPdfFixtures.InvalidPdf() : ParserSpecificPdfFixtures.ImageOnlyPdf();
+        var pdf = kind switch
+        {
+            "invalid" => ParserSpecificPdfFixtures.InvalidPdf(),
+            "image" => ParserSpecificPdfFixtures.ImageOnlyPdf(),
+            _ => ParserSpecificPdfFixtures.EncryptedPdf()
+        };
         var outcome = await new ContainedPdfTextExtractor().ExtractAsync(pdf);
-        Assert.Equal(kind == "invalid" ? "invalid_pdf" : "no_extractable_text", outcome.Failure?.Code);
+        var expected = kind switch
+        {
+            "invalid" => "invalid_pdf",
+            "image" => "no_extractable_text",
+            _ => "encrypted_pdf"
+        };
+        Assert.Equal(expected, outcome.Failure?.Code);
     }
 
     [Fact]
@@ -140,4 +152,5 @@ public sealed class PdfTextExtractorTests
             Environment.SetEnvironmentVariable("BUDGETPLANNER_TEST_SECRET", priorSecret);
         }
     }
+
 }

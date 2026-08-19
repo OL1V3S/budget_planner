@@ -49,6 +49,7 @@ public sealed class PostgreSqlFinancialApiTests
     public async Task Expense_date_migration_preserves_the_utc_calendar_component()
     {
         await using var app = new PostgreSqlFinancialApiTestApplication();
+        using var client = app.CreateTestClient();
         using var scope = app.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<BudgetContext>();
         var migrator = context.GetService<IMigrator>();

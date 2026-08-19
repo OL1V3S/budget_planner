@@ -474,6 +474,26 @@ begins only after explicit human approval. A separate explicit authorization is
 still required for production migrations or other high-risk production
 operations.
 
+For every MEDIUM/HIGH planning-only run, Codex must publish the completed plan
+as a top-level comment on the governing GitHub Issue before stopping for
+approval when issue-comment publication is available. The comment must include
+the information required by the applicable risk gate and issue, such as the
+implementation and verification plans, material context expansions, risks,
+rollback considerations, and requested human decisions.
+
+The planning comment is a durable planning artifact, not implementation
+authority. Publishing it does not authorize repository edits, branch creation,
+commits, pushes, pull requests, migrations, production access or operations,
+deployment, or merge. Implementation still requires the existing explicit
+approval and short implementation handoff.
+
+If issue-comment publication is unavailable, Codex must stop and report a
+**planning-publication capability gap**, identifying the governing issue and
+the unavailable capability. It must not silently leave the workflow appearing
+ready, create an implementation artifact as a substitute, or ask the human to
+relay the full plan manually. The command center may then restore direct
+publication capability or deliberately select the smallest explicit fallback.
+
 When ChatGPT is acting as command center, it should record the approved plan and
 human approval on the governing GitHub Issue before sending the short
 implementation handoff. A materially changed plan, changed financial/security

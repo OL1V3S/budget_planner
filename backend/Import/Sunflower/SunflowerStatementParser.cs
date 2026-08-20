@@ -94,7 +94,13 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
 
                 if (inUnsupportedCheckSection)
                 {
-                    if (IsNoChecksMessage(trimmed) || IsKnownCheckHeader(trimmed) || IsKnownNonRow(trimmed))
+                    if (IsNoChecksMessage(trimmed))
+                    {
+                        inUnsupportedCheckSection = false;
+                        continue;
+                    }
+
+                    if (IsKnownCheckHeader(trimmed) || IsKnownNonRow(trimmed))
                     {
                         continue;
                     }
@@ -476,7 +482,7 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
     [GeneratedRegex(@"(?:---\s*)?No Checks Paid(?: Electronically)? in this statement cycle\.(?:\s*---)?", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex NoChecksMessageInTextRegex();
 
-    [GeneratedRegex(@"^(?:Posted\s*(?:/\s*)?Description\s*(?:/\s*)?Amount|Check Number\s*(?:/\s*)?Date\s*(?:/\s*)?Description\s*(?:/\s*)?Amount)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^(?:Posted\s*(?:/\s*)?Description\s*(?:/\s*)?Amount|Check Number\s*(?:/\s*)?Date\s*(?:/\s*)?Description\s*(?:/\s*)?Amount|Check Number\s+Date\s+Amount\s+Check Number\s+Date\s+Amount)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex CheckHeaderRegex();
 
     [GeneratedRegex(@"^(?<date>\d{2}/\d{2}/\d{2})\s+(?<description>.*?)\s+(?<amount>\S+?)(?<debit>-)?$", RegexOptions.CultureInvariant)]

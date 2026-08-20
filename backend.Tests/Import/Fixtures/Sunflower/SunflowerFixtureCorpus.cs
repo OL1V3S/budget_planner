@@ -96,8 +96,9 @@ public static class SunflowerFixtureCorpus
                     "Posted Description Amount",
                     "--- No Checks Paid Electronically in this statement cycle. ---",
                     "Checks Paid",
-                    "Check Number / Date / Description / Amount",
+                    "Check Number Date Amount Check Number Date Amount",
                     "No Checks Paid in this statement cycle.",
+                    "SYNTHETIC STATEMENT FOOTER",
                     "Important Account Information",
                     "This page contains synthetic disclosure text for parser fixtures only.",
                     "No transaction rows appear on this page."

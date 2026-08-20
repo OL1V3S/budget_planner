@@ -148,7 +148,8 @@ public sealed class SunflowerStatementParserTests
             "SUNFLOWER BANK ADJACENT HEADER\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nPAGE 1 OF 1Daily Balance Summary\n02/01 100.00\n" +
             "Account Summary\nTotal Synthetic Debits 10.00\nElectronic Transactions\nPosted Description Amount\n" +
             "Checks Paid Electronically\nPosted Description Amount\n--- No Checks Paid Electronically in this statement cycle. ---\n" +
-            "Checks Paid\nCheck Number / Date / Description / Amount\nNo Checks Paid in this statement cycle.\n" +
+            "Checks Paid\nCheck Number Date Amount Check Number Date Amount\nNo Checks Paid in this statement cycle.\n" +
+            "SYNTHETIC STATEMENT FOOTER\n" +
             "Important Account Information\nSynthetic disclosure"));
 
         Assert.True(result.IsSuccess);
@@ -160,7 +161,7 @@ public sealed class SunflowerStatementParserTests
     {
         var result = new SunflowerStatementParser().Parse(Result(
             "SUNFLOWER BANK\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\n" +
-            "Posted Description Amount\nChecks Paid\nCheck Number / Date / Description / Amount\n1001 02/01/26 10.00-"));
+            "Posted Description Amount\nChecks Paid\nCheck Number Date Amount Check Number Date Amount\n1001 02/01/26 10.00-"));
 
         Assert.Equal("unsupported_statement_format", result.Failure?.Code);
         Assert.Empty(result.Rows);

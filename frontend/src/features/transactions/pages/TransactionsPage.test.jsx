@@ -3,8 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TransactionsPage from './TransactionsPage'
 import { useExpenses } from '../../expenses/hooks/useExpenses'
+import { useImportPreview } from '../../importPreview/hooks/useImportPreview'
 
 vi.mock('../../expenses/hooks/useExpenses', () => ({ useExpenses: vi.fn() }))
+vi.mock('../../importPreview/hooks/useImportPreview', () => ({ useImportPreview: vi.fn() }))
 
 const baseExpensesHook = {
   expenses: [],
@@ -14,9 +16,21 @@ const baseExpensesHook = {
   deleteExpense: vi.fn(),
 }
 
+const baseImportHook = {
+  preview: null,
+  loading: false,
+  processing: false,
+  error: '',
+  upload: vi.fn(),
+  cancel: vi.fn(),
+  updateRow: vi.fn(),
+  clearForReupload: vi.fn(),
+}
+
 describe('existing expense workflows', () => {
   beforeEach(() => {
     useExpenses.mockReturnValue({ ...baseExpensesHook })
+    useImportPreview.mockReturnValue({ ...baseImportHook })
     vi.spyOn(window, 'alert').mockImplementation(() => {})
   })
 
@@ -143,5 +157,85 @@ describe('existing expense workflows', () => {
     expect(screen.getByPlaceholderText('Description')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Spending vs Budget Limits' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Chart month')).not.toBeInTheDocument()
+  })
+
+  it('uploads a PDF through the normal Transactions experience', async () => {
+    const user = userEvent.setup()
+    const upload = vi.fn().mockResolvedValue(null)
+    useImportPreview.mockReturnValue({ ...baseImportHook, upload })
+    render(<TransactionsPage />)
+    const file = new File(['synthetic'], 'statement.pdf', { type: 'application/pdf' })
+
+    await user.upload(screen.getByLabelText('Sunflower statement PDF'), file)
+
+    expect(upload).toHaveBeenCalledWith(file)
+    expect(screen.getByText(/Preview only — no expenses have been created/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /confirm|import expenses/i })).not.toBeInTheDocument()
+  })
+
+  it('shows processing and safe retry errors without statement details', async () => {
+    const user = userEvent.setup()
+    const cancel = vi.fn()
+    useImportPreview.mockReturnValue({
+      ...baseImportHook,
+      processing: true,
+      error: 'Statement processing timed out. Try the upload again.',
+      cancel,
+    })
+    render(<TransactionsPage />)
+
+    expect(screen.getByRole('status')).toHaveTextContent('Processing the statement safely')
+    expect(screen.getByRole('alert')).toHaveTextContent('Statement processing timed out')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(cancel).toHaveBeenCalled()
+  })
+
+  it('renders resumed rows with duplicate and ineligible affordances and persists eligible edits', async () => {
+    const user = userEvent.setup()
+    const updateRow = vi.fn().mockResolvedValue(undefined)
+    useImportPreview.mockReturnValue({
+      ...baseImportHook,
+      updateRow,
+      preview: {
+        batchId: '11111111-1111-1111-1111-111111111111',
+        expiresAt: '2026-08-21T12:00:00Z',
+        rows: [
+          {
+            rowId: 'row-1', sourceRowOrdinal: 1, postedDate: '2026-08-12', amount: 8.5,
+            direction: 'debit', sourceDescription: 'REPEATED CAFE', sourceSection: 'electronic_transactions',
+            classification: 'expense_candidate', isEligible: true, errors: [], warnings: ['possible_duplicate'],
+            isPossibleDuplicate: true, editableExpenseDescription: 'REPEATED CAFE', category: 'uncategorized',
+            selectedForImport: false,
+          },
+          {
+            rowId: 'row-2', sourceRowOrdinal: 2, postedDate: '2026-08-13', amount: 12.34,
+            direction: 'unresolved', sourceDescription: 'SOURCE DIRECTION UNKNOWN', sourceSection: 'electronic_transactions',
+            classification: 'needs_review', isEligible: false, errors: [], warnings: [],
+            isPossibleDuplicate: false, editableExpenseDescription: null, category: null,
+            selectedForImport: false,
+          },
+        ],
+      },
+    })
+    render(<TransactionsPage />)
+
+    const table = screen.getByRole('region', { name: 'Statement import preview' })
+    expect(within(table).getByText('Possible duplicate — review before selecting')).toBeInTheDocument()
+    expect(within(table).getByText('Needs review')).toBeInTheDocument()
+    expect(within(table).getByLabelText('Not selectable')).toBeDisabled()
+    await user.click(within(table).getByLabelText('Select for future import'))
+    expect(updateRow).toHaveBeenCalledWith('row-1', expect.objectContaining({ selectedForImport: true }))
+
+    const description = within(table).getByLabelText('Expense description')
+    await user.clear(description)
+    await user.type(description, 'Morning coffee')
+    await user.selectOptions(within(table).getByLabelText('Category'), 'food')
+    await user.click(within(table).getByRole('button', { name: 'Save row' }))
+    expect(updateRow).toHaveBeenLastCalledWith('row-1', {
+      editableExpenseDescription: 'Morning coffee',
+      category: 'food',
+      selectedForImport: false,
+    })
+    expect(screen.queryByRole('button', { name: /confirm|import expenses/i })).not.toBeInTheDocument()
   })
 })

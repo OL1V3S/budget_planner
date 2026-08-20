@@ -24,9 +24,8 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
             return SunflowerStatementParseResult.Failed(SunflowerStatementParseFailure.UnsupportedFormat);
         }
 
-        var statementText = string.Join('\n', extraction.Pages.Select(page => page.Text));
         cancellationToken.ThrowIfCancellationRequested();
-        if (!HasSunflowerHeaderIdentity(statementText))
+        if (!HasSunflowerHeaderIdentity(extraction.Pages))
         {
             return SunflowerStatementParseResult.Failed(SunflowerStatementParseFailure.UnsupportedSource);
         }
@@ -46,8 +45,7 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
 
         var hasDaysMarker = extraction.Pages.Any(page => DaysInStatementPeriodRegex().IsMatch(page.Text));
         var hasTransactionHeading = extraction.Pages.SelectMany(SplitLines).Any(line => IsTransactionHeading(line.Trim()));
-        var hasColumnHeader = extraction.Pages.Any(page =>
-            page.Text.Contains("Posted Description Amount", StringComparison.OrdinalIgnoreCase));
+        var hasColumnHeader = extraction.Pages.Any(page => PostedDescriptionAmountRegex().IsMatch(page.Text));
         if (statementDates.Count != 1 || !hasDaysMarker || !hasTransactionHeading || !hasColumnHeader)
         {
             return SunflowerStatementParseResult.Failed(SunflowerStatementParseFailure.UnsupportedFormat);
@@ -134,7 +132,7 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
                     continue;
                 }
 
-                if (trimmed.Equals("Posted Description Amount", StringComparison.OrdinalIgnoreCase))
+                if (PostedDescriptionAmountRegex().IsMatch(trimmed))
                 {
                     section = pendingSection
                               ?? (rememberedSection == ElectronicTransactionsSection ? rememberedSection : null);
@@ -351,28 +349,14 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
         pages.Count > 0
         && pages.Select(page => page.PageNumber).SequenceEqual(Enumerable.Range(1, pages.Count));
 
-    private static bool HasSunflowerHeaderIdentity(string statementText)
-    {
-        var brand = SunflowerBrandRegex().Match(statementText);
-        if (!brand.Success)
+    private static bool HasSunflowerHeaderIdentity(IReadOnlyList<PdfExtractedPage> pages) =>
+        pages.Any(page =>
         {
-            return false;
-        }
-
-        var structuralIndexes = new[]
-            {
-                StatementDateRegex().Match(statementText),
-                DaysInStatementPeriodRegex().Match(statementText),
-                Regex.Match(statementText, Regex.Escape("Deposits"), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
-                Regex.Match(statementText, Regex.Escape("Electronic Transactions"), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
-                Regex.Match(statementText, Regex.Escape("Posted Description Amount"), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
-            }
-            .Where(match => match.Success)
-            .Select(match => match.Index)
-            .ToList();
-
-        return structuralIndexes.Count > 0 && brand.Index < structuralIndexes.Min();
-    }
+            var statementDate = StatementDateRegex().Match(page.Text);
+            return statementDate.Success
+                   && SunflowerBrandRegex().Matches(page.Text)
+                       .Any(brand => brand.Index < statementDate.Index);
+        });
 
     private static IEnumerable<string> SplitLines(PdfExtractedPage page)
     {
@@ -380,9 +364,7 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
         var fixedMarkers = new[]
         {
             "Important Account Information",
-            "Posted Description Amount",
             "Electronic Transactions",
-            "Days in Statement Period",
             "Transaction Summary",
             "Account Summary",
             "Daily Balance Summary",
@@ -402,11 +384,10 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
             match => $"\n{match.Value}\n",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-        text = Regex.Replace(
-            text,
-            @"STATEMENT DATE:\s*\d{2}/\d{2}/\d{2}",
-            match => $"\n{match.Value}\n",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        text = StatementDateRegex().Replace(text, match => $"\n{match.Value}\n");
+        text = DaysInStatementPeriodRegex().Replace(text, match => $"\n{match.Value}\n");
+        text = PostedDescriptionAmountRegex().Replace(text, match => $"\n{match.Value}\n");
+
         text = Regex.Replace(
             text,
             @"Page\s+\d+\s+of\s+\d+",
@@ -466,7 +447,7 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
     private static bool IsStructuralLine(string line) =>
         IsTransactionHeading(line)
         || IsNonTransactionBoundary(line)
-        || line.Equals("Posted Description Amount", StringComparison.OrdinalIgnoreCase);
+        || PostedDescriptionAmountRegex().IsMatch(line);
 
     private sealed record SourceLine(int PageNumber, string Text);
 
@@ -478,11 +459,14 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
         public List<string> DescriptionContinuation { get; } = new();
     }
 
-    [GeneratedRegex(@"(?<![A-Za-z])STATEMENT DATE:\s*(?<date>\d{2}/\d{2}/\d{2})(?![\d/])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?<![A-Za-z])STATEMENT\s*DATE\s*:\s*(?<date>\d{2}/\d{2}/\d{2})(?![\d/])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex StatementDateRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z])Days in Statement Period:\s*\d+(?=\s|Page|Electronic Transactions|Deposits|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?<![A-Za-z])Days\s*in\s*Statement\s*Period\s*:\s*\d+(?!\d)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DaysInStatementPeriodRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z])Posted\s*Description\s*Amount(?![A-Za-z])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex PostedDescriptionAmountRegex();
 
     [GeneratedRegex(@"\bSUNFLOWER(?:BANK)?\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SunflowerBrandRegex();

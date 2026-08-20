@@ -48,13 +48,13 @@ public sealed class SunflowerFixtureCorpusTests
 
         Assert.True(SunflowerFixtureCorpus.RepresentativePages[0].Lines.Contains("Deposits"));
         Assert.True(SunflowerFixtureCorpus.RepresentativePages[0].Lines.Contains("Electronic Transactions"));
-        Assert.True(SunflowerFixtureCorpus.RepresentativePages[1].Lines.Contains("Electronic Transactions (continued)"));
-        Assert.False(SunflowerFixtureCorpus.RepresentativePages[2].ContainsTransactions);
+        Assert.Empty(SunflowerFixtureCorpus.RepresentativePages[1].Lines);
+        Assert.True(SunflowerFixtureCorpus.RepresentativePages[2].Lines.Any(line => line.Contains("Posted Description Amount", StringComparison.Ordinal)));
         Assert.False(SunflowerFixtureCorpus.RepresentativePages[3].ContainsTransactions);
 
         var repeatedOutflows = SunflowerFixtureCorpus.RepresentativePages
             .SelectMany(page => page.Lines)
-            .Count(line => line == "02/12 REPEATED CAFE 8.50-");
+            .Count(line => line == "02/12/26 REPEATED CAFE 8.50-");
 
         Assert.Equal(2, repeatedOutflows);
     }

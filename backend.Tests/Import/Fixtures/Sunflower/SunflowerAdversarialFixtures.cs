@@ -23,10 +23,11 @@ public static class SunflowerAdversarialFixtures
                 new List<string>
                 {
                     "PRAIRIE COMMUNITY BANK",
-                    "ACCOUNT NUMBER 000000000777",
-                    "STATEMENT DATE 02/28/2026",
+                    "STATEMENT DATE: 02/28/26",
+                    "Days in Statement Period: 28",
                     "Electronic Transactions",
-                    "02/14 SAMPLE PURCHASE 19.25-"
+                    "Posted Description Amount",
+                    "02/14/26 SAMPLE PURCHASE 19.25-"
                 }
             });
 
@@ -68,14 +69,22 @@ public static class SunflowerAdversarialFixtures
             var lines = new List<string>
             {
                 "SUNFLOWER BANK",
-                page == 0 ? "Electronic Transactions" : "Electronic Transactions (continued)"
+                $"Page {page + 1} of {pageCount}"
             };
+
+            if (page == 0)
+            {
+                lines.Add("STATEMENT DATE: 02/28/26");
+                lines.Add("Days in Statement Period: 28");
+                lines.Add("Electronic Transactions");
+            }
+            lines.Add("Posted Description Amount");
 
             for (var pageRow = 0; pageRow < CandidateRowsPerPage && nextRow <= rowCount; pageRow++)
             {
                 var day = ((nextRow - 1) % 28) + 1;
                 var amount = 10m + ((nextRow - 1) % 90) + 0.25m;
-                lines.Add(FormattableString.Invariant($"02/{day:D2} SYNTHETIC ROW {nextRow:D4} {amount:0.00}-"));
+                lines.Add(FormattableString.Invariant($"02/{day:D2}/26 SYNTHETIC ROW {nextRow:D4} {amount:0.00}-"));
                 nextRow++;
             }
 

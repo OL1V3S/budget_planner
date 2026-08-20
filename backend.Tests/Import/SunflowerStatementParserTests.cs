@@ -62,6 +62,18 @@ public sealed class SunflowerStatementParserTests
             "unsupported_statement_source",
             parser.Parse(Result("GENERIC HEADER\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\nPosted Description Amount\nA GENERIC SUNFLOWER REFERENCE"))
                 .Failure?.Code);
+        Assert.Equal(
+            "unsupported_statement_source",
+            parser.Parse(Result("GENERIC HEADER\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\nPosted Description Amount\nA LATE SunflowerBank REFERENCE"))
+                .Failure?.Code);
+
+        foreach (var nearMiss in new[] { "SunflowerBanking", "SunflowerAnything" })
+        {
+            Assert.Equal(
+                "unsupported_statement_source",
+                parser.Parse(Result($"{nearMiss}\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\nPosted Description Amount"))
+                    .Failure?.Code);
+        }
 
         var preamble = parser.Parse(Result(
             "SYNTHETIC PREAMBLE\nHEADER CODE 123\nSUNFLOWER BANK ADJACENT HEADER\n" +
@@ -69,6 +81,13 @@ public sealed class SunflowerStatementParserTests
             "Posted Description Amount\n02/01/26 PURCHASE 1.00-"));
         Assert.True(preamble.IsSuccess);
         Assert.Single(preamble.Rows);
+
+        var concatenatedBrand = parser.Parse(Result(
+            "SYNTHETIC PREAMBLE\nSunflowerBank FIRST NATIONAL 1870\n" +
+            "STATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\n" +
+            "Posted Description Amount\n02/01/26 PURCHASE 1.00-"));
+        Assert.True(concatenatedBrand.IsSuccess);
+        Assert.Single(concatenatedBrand.Rows);
     }
 
     [Fact]

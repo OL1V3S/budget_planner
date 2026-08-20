@@ -484,7 +484,7 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
     [GeneratedRegex(@"(?<![A-Za-z])Days in Statement Period:\s*\d+(?=\s|Page|Electronic Transactions|Deposits|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DaysInStatementPeriodRegex();
 
-    [GeneratedRegex(@"\bSUNFLOWER\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\bSUNFLOWER(?:BANK)?\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SunflowerBrandRegex();
 
     [GeneratedRegex(@"^(?:---\s*)?No Checks Paid(?: Electronically)? in this statement cycle\.(?:\s*---)?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

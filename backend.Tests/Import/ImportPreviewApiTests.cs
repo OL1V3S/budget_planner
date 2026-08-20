@@ -208,6 +208,32 @@ public sealed class ImportPreviewApiTests
         Assert.Equal(0, await app.CountExpensesAsync());
     }
 
+    [Fact]
+    public async Task Concatenated_sunflower_brand_flows_through_extractor_and_preview_api()
+    {
+        await using var app = new FinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("preview-concatenated-brand@example.com");
+        var lines = new[]
+        {
+            "SunflowerBank FIRST NATIONAL 1870",
+            "STATEMENT DATE: 02/28/26",
+            "Days in Statement Period: 28",
+            "Electronic Transactions",
+            "Posted Description Amount",
+            "02/05/26 SYNTHETIC MARKET 42.16-"
+        };
+        using var content = PdfUpload(SyntheticPdfBuilder.Build(new IReadOnlyList<string>[] { lines }));
+
+        var response = await owner.Client.PostAsync("/api/import-previews/sunflower", content);
+        var preview = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var row = Assert.Single(preview.GetProperty("rows").EnumerateArray());
+        Assert.Equal("SYNTHETIC MARKET", row.GetProperty("sourceDescription").GetString());
+        Assert.Equal(1, await app.CountImportPreviewBatchesAsync(owner.Id));
+        Assert.Equal(0, await app.CountExpensesAsync());
+    }
+
     [Theory]
     [InlineData("malformed", "invalid_pdf")]
     [InlineData("encrypted", "encrypted_pdf")]

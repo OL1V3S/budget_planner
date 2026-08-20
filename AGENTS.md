@@ -460,6 +460,53 @@ python3 .github/scripts/build_repo_map.py --root . --output /tmp/budget-planner-
 The map is navigation context only; canonical repository files and executable
 behavior remain authoritative.
 
+### Credit-aware execution
+
+When the active Codex environment exposes a choice of agent, model, subagent,
+or reasoning level, start with the least expensive option reasonably capable
+of the task and escalate deliberately when the work demonstrates a need for
+more capability. Use lighter execution for narrow discovery, repository
+navigation, mechanical edits, formatting, simple tests, and bounded
+verification. Apply context pruning, targeted searches, repository maps, and
+durable task artifacts before increasing capability merely to compensate for
+oversized or repeatedly replayed context.
+
+Match capability to risk and ambiguity, not only task size:
+
+- LOW mechanical work should default to cheaper adequate execution;
+- MEDIUM work may begin with a balanced option, but architectural ambiguity,
+  cross-boundary reasoning, or repeated uncertainty should trigger escalation
+  for planning and synthesis; and
+- HIGH work involving security, authentication, financial semantics,
+  migrations, production configuration, destructive operations, or deployment
+  must prioritize correctness and use the strongest appropriate available
+  capability when a choice exists.
+
+When supported safely, delegate bounded search, test, mechanical, or
+verification subtasks to cheaper adequate subagents. Reserve stronger
+capability for synthesis, architecture, difficult debugging, security and
+financial reasoning, approval-gate plans, and final integration or review when
+warranted. Delegation never broadens repository context, issue scope, or
+authority.
+
+One bounded retry or correction may be reasonable for an incidental failure.
+When failure instead demonstrates a capability or ambiguity limit, escalate to
+a stronger appropriate option rather than repeatedly retrying an inadequate
+one. Record material escalations and their reasons in the plan or final report
+when they materially affected execution.
+
+Credit efficiency never weakens issue scope, context pruning, MEDIUM/HIGH
+approval gates, security/privacy/financial invariants, required tests or CI,
+independent PR review, migration/deployment/production-operation approvals, or
+human merge authority. Correctness and those controls always take precedence.
+
+If the environment cannot programmatically select an agent, model, subagent, or
+reasoning level, do not claim a switch occurred and do not treat the missing
+control as a blocker. Apply the controllable parts of this policy instead:
+pruned context, concise prompts, bounded delegation where available, targeted
+verification, durable GitHub and repository artifacts, and avoidance of
+redundant retries.
+
 ### Risk approvals in the local-Codex workflow
 
 LOW work may proceed after the task is explicitly selected under the LOW

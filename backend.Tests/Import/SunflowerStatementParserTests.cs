@@ -60,8 +60,15 @@ public sealed class SunflowerStatementParserTests
                 .Failure?.Code);
         Assert.Equal(
             "unsupported_statement_source",
-            parser.Parse(Result("A GENERIC SUNFLOWER REFERENCE\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\nPosted Description Amount"))
+            parser.Parse(Result("GENERIC HEADER\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\nPosted Description Amount\nA GENERIC SUNFLOWER REFERENCE"))
                 .Failure?.Code);
+
+        var preamble = parser.Parse(Result(
+            "SYNTHETIC PREAMBLE\nHEADER CODE 123\nSUNFLOWER BANK ADJACENT HEADER\n" +
+            "STATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\n" +
+            "Posted Description Amount\n02/01/26 PURCHASE 1.00-"));
+        Assert.True(preamble.IsSuccess);
+        Assert.Single(preamble.Rows);
     }
 
     [Fact]
@@ -140,8 +147,8 @@ public sealed class SunflowerStatementParserTests
         var result = new SunflowerStatementParser().Parse(Result(
             "SUNFLOWER BANK ADJACENT HEADER\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nPAGE 1 OF 1Daily Balance Summary\n02/01 100.00\n" +
             "Account Summary\nTotal Synthetic Debits 10.00\nElectronic Transactions\nPosted Description Amount\n" +
-            "Checks Paid Electronically\n--- No Checks Paid Electronically in this statement cycle. ---\n" +
-            "Checks Paid\nNo Checks Paid in this statement cycle.\n" +
+            "Checks Paid Electronically\nPosted Description Amount\n--- No Checks Paid Electronically in this statement cycle. ---\n" +
+            "Checks Paid\nCheck Number / Date / Description / Amount\nNo Checks Paid in this statement cycle.\n" +
             "Important Account Information\nSynthetic disclosure"));
 
         Assert.True(result.IsSuccess);
@@ -153,7 +160,7 @@ public sealed class SunflowerStatementParserTests
     {
         var result = new SunflowerStatementParser().Parse(Result(
             "SUNFLOWER BANK\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\n" +
-            "Posted Description Amount\nChecks Paid\n1001 02/01/26 10.00-"));
+            "Posted Description Amount\nChecks Paid\nCheck Number / Date / Description / Amount\n1001 02/01/26 10.00-"));
 
         Assert.Equal("unsupported_statement_format", result.Failure?.Code);
         Assert.Empty(result.Rows);

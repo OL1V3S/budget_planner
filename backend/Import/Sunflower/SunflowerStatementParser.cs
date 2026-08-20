@@ -21,8 +21,8 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
             return SunflowerStatementParseResult.Failed(SunflowerStatementParseFailure.UnsupportedFormat);
         }
 
-        var firstTextPage = extraction.Pages.FirstOrDefault(page => !string.IsNullOrWhiteSpace(page.Text));
-        if (firstTextPage is null || !SunflowerHeaderRegex().IsMatch(firstTextPage.Text))
+        var statementText = string.Join('\n', extraction.Pages.Select(page => page.Text));
+        if (!HasSunflowerHeaderIdentity(statementText))
         {
             return SunflowerStatementParseResult.Failed(SunflowerStatementParseFailure.UnsupportedSource);
         }
@@ -94,7 +94,7 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
 
                 if (inUnsupportedCheckSection)
                 {
-                    if (IsNoChecksMessage(trimmed) || IsKnownNonRow(trimmed))
+                    if (IsNoChecksMessage(trimmed) || IsKnownCheckHeader(trimmed) || IsKnownNonRow(trimmed))
                     {
                         continue;
                     }
@@ -334,6 +334,29 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
         pages.Count > 0
         && pages.Select(page => page.PageNumber).SequenceEqual(Enumerable.Range(1, pages.Count));
 
+    private static bool HasSunflowerHeaderIdentity(string statementText)
+    {
+        var brand = SunflowerBrandRegex().Match(statementText);
+        if (!brand.Success)
+        {
+            return false;
+        }
+
+        var structuralIndexes = new[]
+            {
+                StatementDateRegex().Match(statementText),
+                DaysInStatementPeriodRegex().Match(statementText),
+                Regex.Match(statementText, Regex.Escape("Deposits"), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+                Regex.Match(statementText, Regex.Escape("Electronic Transactions"), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+                Regex.Match(statementText, Regex.Escape("Posted Description Amount"), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+            }
+            .Where(match => match.Success)
+            .Select(match => match.Index)
+            .ToList();
+
+        return structuralIndexes.Count > 0 && brand.Index < structuralIndexes.Min();
+    }
+
     private static IEnumerable<string> SplitLines(PdfExtractedPage page)
     {
         var text = page.Text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
@@ -377,7 +400,7 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
             @"(?=\d{2}/\d{2}/\d{2}\s)",
             "\n",
             RegexOptions.CultureInvariant);
-        text = NoChecksMessageRegex().Replace(text, match => $"\n{match.Value}\n");
+        text = NoChecksMessageInTextRegex().Replace(text, match => $"\n{match.Value}\n");
 
         return text.Split('\n');
     }
@@ -418,6 +441,8 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
 
     private static bool IsNoChecksMessage(string line) => NoChecksMessageRegex().IsMatch(line.Trim());
 
+    private static bool IsKnownCheckHeader(string line) => CheckHeaderRegex().IsMatch(line);
+
     private static bool IsKnownSectionContent(string line) =>
         line.StartsWith("Total ", StringComparison.OrdinalIgnoreCase);
 
@@ -442,11 +467,17 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
     [GeneratedRegex(@"(?<![A-Za-z])Days in Statement Period:\s*\d+(?=\s|Page|Electronic Transactions|Deposits|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DaysInStatementPeriodRegex();
 
-    [GeneratedRegex(@"^\s*SUNFLOWER\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex SunflowerHeaderRegex();
+    [GeneratedRegex(@"\bSUNFLOWER\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SunflowerBrandRegex();
 
     [GeneratedRegex(@"^(?:---\s*)?No Checks Paid(?: Electronically)? in this statement cycle\.(?:\s*---)?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex NoChecksMessageRegex();
+
+    [GeneratedRegex(@"(?:---\s*)?No Checks Paid(?: Electronically)? in this statement cycle\.(?:\s*---)?", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex NoChecksMessageInTextRegex();
+
+    [GeneratedRegex(@"^(?:Posted\s*(?:/\s*)?Description\s*(?:/\s*)?Amount|Check Number\s*(?:/\s*)?Date\s*(?:/\s*)?Description\s*(?:/\s*)?Amount)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex CheckHeaderRegex();
 
     [GeneratedRegex(@"^(?<date>\d{2}/\d{2}/\d{2})\s+(?<description>.*?)\s+(?<amount>\S+?)(?<debit>-)?$", RegexOptions.CultureInvariant)]
     private static partial Regex TransactionRowRegex();

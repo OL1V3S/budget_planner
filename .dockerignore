@@ -1,0 +1,11 @@
+.git
+.github
+.agents
+.codex
+frontend
+backend.Tests
+docs
+*.md
+**/.DS_Store
+**/bin
+**/obj

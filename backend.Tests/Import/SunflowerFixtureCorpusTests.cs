@@ -54,7 +54,7 @@ public sealed class SunflowerFixtureCorpusTests
 
         var repeatedOutflows = SunflowerFixtureCorpus.RepresentativePages
             .SelectMany(page => page.Lines)
-            .Count(line => line == "02/12 REPEATED CAFE 8.50-");
+            .Count(line => line == "02/12/26 REPEATED CAFE 8.50-");
 
         Assert.Equal(2, repeatedOutflows);
     }

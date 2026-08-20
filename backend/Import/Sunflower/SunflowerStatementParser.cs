@@ -21,146 +21,155 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
             return SunflowerStatementParseResult.Failed(SunflowerStatementParseFailure.UnsupportedFormat);
         }
 
-        var lines = extraction.Pages
-            .SelectMany(page => SplitLines(page).Select(line => new SourceLine(page.PageNumber, line)))
-            .ToList();
-
-        if (!lines.Any(line => line.Text.Trim().Equals("SUNFLOWER BANK", StringComparison.OrdinalIgnoreCase)))
+        var firstTextPage = extraction.Pages.FirstOrDefault(page => !string.IsNullOrWhiteSpace(page.Text));
+        if (firstTextPage is null || !SunflowerHeaderRegex().IsMatch(firstTextPage.Text))
         {
             return SunflowerStatementParseResult.Failed(SunflowerStatementParseFailure.UnsupportedSource);
         }
 
-        var statementDates = lines
-            .Select(line => TryParseStatementDate(line.Text, out var date) ? date : (DateOnly?)null)
+        var statementDates = extraction.Pages
+            .SelectMany(page => StatementDateRegex().Matches(page.Text).Select(match => match.Groups["date"].Value))
+            .Select(value => TryParseStatementDate(value, out var date) ? date : (DateOnly?)null)
             .Where(date => date.HasValue)
             .Select(date => date!.Value)
             .Distinct()
             .ToList();
 
-        var hasDaysMarker = lines.Any(line => DaysInStatementPeriodRegex().IsMatch(line.Text.Trim()));
-        var hasTransactionHeading = lines.Any(line => IsTransactionHeading(line.Text.Trim()));
-        if (statementDates.Count != 1 || !hasDaysMarker || !hasTransactionHeading)
+        var hasDaysMarker = extraction.Pages.Any(page => DaysInStatementPeriodRegex().IsMatch(page.Text));
+        var hasTransactionHeading = extraction.Pages.SelectMany(SplitLines).Any(line => IsTransactionHeading(line.Trim()));
+        var hasColumnHeader = extraction.Pages.Any(page =>
+            page.Text.Contains("Posted Description Amount", StringComparison.OrdinalIgnoreCase));
+        if (statementDates.Count != 1 || !hasDaysMarker || !hasTransactionHeading || !hasColumnHeader)
         {
             return SunflowerStatementParseResult.Failed(SunflowerStatementParseFailure.UnsupportedFormat);
         }
 
         var statementDate = statementDates[0];
         var rows = new List<NormalizedImportedRow>();
-        string? section = null;
-        string? pendingSection = null;
-        PendingRow? pendingRow = null;
-        var inUnsupportedCheckSection = false;
+        string? rememberedSection = null;
 
-        void FlushPending()
+        foreach (var page in extraction.Pages)
         {
-            if (pendingRow is null)
+            string? section = null;
+            string? pendingSection = null;
+            PendingRow? pendingRow = null;
+            var inUnsupportedCheckSection = false;
+
+            void FlushPending()
             {
-                return;
-            }
-
-            rows.Add(ParseRow(pendingRow, statementDate, rows.Count + 1));
-            pendingRow = null;
-        }
-
-        foreach (var sourceLine in lines)
-        {
-            var trimmed = sourceLine.Text.Trim();
-            if (trimmed.Length == 0)
-            {
-                continue;
-            }
-
-            if (pendingRow is not null && char.IsWhiteSpace(sourceLine.Text[0]) && !IsStructuralLine(trimmed))
-            {
-                pendingRow.DescriptionContinuation.Add(trimmed);
-                continue;
-            }
-
-            FlushPending();
-
-            if (trimmed.Equals("Checks Paid", StringComparison.OrdinalIgnoreCase)
-                || trimmed.Equals("Checks Paid Electronically", StringComparison.OrdinalIgnoreCase))
-            {
-                section = null;
-                pendingSection = null;
-                inUnsupportedCheckSection = true;
-                continue;
-            }
-
-            if (inUnsupportedCheckSection)
-            {
-                if (trimmed.Equals("NONE", StringComparison.OrdinalIgnoreCase) || IsKnownNonRow(trimmed))
+                if (pendingRow is null)
                 {
+                    return;
+                }
+
+                rows.Add(ParseRow(pendingRow, statementDate, rows.Count + 1));
+                pendingRow = null;
+            }
+
+            foreach (var sourceLine in SplitLines(page).Select(line => new SourceLine(page.PageNumber, line)))
+            {
+                var trimmed = sourceLine.Text.Trim();
+                if (trimmed.Length == 0)
+                {
+                    continue;
+                }
+
+                if (pendingRow is not null && char.IsWhiteSpace(sourceLine.Text[0]) && !IsStructuralLine(trimmed))
+                {
+                    pendingRow.DescriptionContinuation.Add(trimmed);
+                    continue;
+                }
+
+                FlushPending();
+
+                if (trimmed.Equals("Checks Paid", StringComparison.OrdinalIgnoreCase)
+                    || trimmed.Equals("Checks Paid Electronically", StringComparison.OrdinalIgnoreCase))
+                {
+                    section = null;
+                    pendingSection = null;
+                    rememberedSection = null;
+                    inUnsupportedCheckSection = true;
+                    continue;
+                }
+
+                if (inUnsupportedCheckSection)
+                {
+                    if (IsNoChecksMessage(trimmed) || IsKnownNonRow(trimmed))
+                    {
+                        continue;
+                    }
+
+                    if (IsNonTransactionBoundary(trimmed))
+                    {
+                        inUnsupportedCheckSection = false;
+                    }
+                    else
+                    {
+                        return SunflowerStatementParseResult.Failed(
+                            SunflowerStatementParseFailure.UnsupportedFormat);
+                    }
+                }
+
+                if (TryGetTransactionHeading(trimmed, out var headingSection))
+                {
+                    pendingSection = headingSection;
+                    rememberedSection = headingSection;
+                    continue;
+                }
+
+                if (trimmed.Equals("Posted Description Amount", StringComparison.OrdinalIgnoreCase))
+                {
+                    section = pendingSection
+                              ?? (rememberedSection == ElectronicTransactionsSection ? rememberedSection : null);
                     continue;
                 }
 
                 if (IsNonTransactionBoundary(trimmed))
                 {
-                    inUnsupportedCheckSection = false;
+                    section = null;
+                    pendingSection = null;
+                    if (IsTerminalBoundary(trimmed))
+                    {
+                        rememberedSection = null;
+                    }
+                    continue;
                 }
-                else
+
+                if (section is null || IsKnownNonRow(trimmed))
                 {
-                    return SunflowerStatementParseResult.Failed(
-                        SunflowerStatementParseFailure.UnsupportedFormat);
+                    continue;
                 }
-            }
 
-            if (TryGetTransactionHeading(trimmed, out var headingSection))
-            {
-                pendingSection = headingSection;
-                section = trimmed.EndsWith("(continued)", StringComparison.OrdinalIgnoreCase)
-                    ? headingSection
-                    : null;
-                continue;
-            }
-
-            if (trimmed.Equals("Posted Description Amount", StringComparison.OrdinalIgnoreCase))
-            {
-                section = pendingSection;
-                continue;
-            }
-
-            if (IsNonTransactionBoundary(trimmed))
-            {
-                section = null;
-                pendingSection = null;
-                continue;
-            }
-
-            if (section is null || IsKnownNonRow(trimmed))
-            {
-                continue;
-            }
-
-            if (LooksLikeTransactionStart(trimmed))
-            {
-                if (rows.Count >= MaximumCandidateRows)
+                if (LooksLikeTransactionStart(trimmed))
                 {
-                    return SunflowerStatementParseResult.Failed(
-                        SunflowerStatementParseFailure.CandidateRowLimitExceeded);
+                    if (rows.Count >= MaximumCandidateRows)
+                    {
+                        return SunflowerStatementParseResult.Failed(
+                            SunflowerStatementParseFailure.CandidateRowLimitExceeded);
+                    }
+
+                    pendingRow = new PendingRow(sourceLine.PageNumber, section, trimmed);
+                    continue;
                 }
 
-                pendingRow = new PendingRow(sourceLine.PageNumber, section, trimmed);
-                continue;
-            }
-
-            if (!IsKnownSectionContent(trimmed))
-            {
-                if (rows.Count >= MaximumCandidateRows)
+                if (!IsKnownSectionContent(trimmed))
                 {
-                    return SunflowerStatementParseResult.Failed(
-                        SunflowerStatementParseFailure.CandidateRowLimitExceeded);
-                }
+                    if (rows.Count >= MaximumCandidateRows)
+                    {
+                        return SunflowerStatementParseResult.Failed(
+                            SunflowerStatementParseFailure.CandidateRowLimitExceeded);
+                    }
 
-                rows.Add(CreateInvalidRow(
-                    sourceLine.PageNumber,
-                    section,
-                    rows.Count + 1,
-                    "unsupported_transaction_row"));
+                    rows.Add(CreateInvalidRow(
+                        sourceLine.PageNumber,
+                        section,
+                        rows.Count + 1,
+                        "unsupported_transaction_row"));
+                }
             }
+
+            FlushPending();
         }
-
-        FlushPending();
         return SunflowerStatementParseResult.Success(rows);
     }
 
@@ -301,17 +310,24 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
                && amount > 0;
     }
 
-    private static bool TryParseStatementDate(string line, out DateOnly date)
+    private static bool TryParseStatementDate(string value, out DateOnly date)
     {
         date = default;
-        var match = StatementDateRegex().Match(line.Trim());
-        return match.Success
-               && DateOnly.TryParseExact(
-                   match.Groups["date"].Value,
-                   "MM/dd/yyyy",
-                   CultureInfo.InvariantCulture,
-                   DateTimeStyles.None,
-                   out date);
+        var match = TransactionDateRegex().Match(value);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var month = int.Parse(match.Groups["month"].Value, CultureInfo.InvariantCulture);
+        var day = int.Parse(match.Groups["day"].Value, CultureInfo.InvariantCulture);
+        var year = 2000 + int.Parse(match.Groups["year"].Value, CultureInfo.InvariantCulture);
+        return DateOnly.TryParseExact(
+            $"{year:D4}-{month:D2}-{day:D2}",
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out date);
     }
 
     private static bool HasOrderedPages(IReadOnlyList<PdfExtractedPage> pages) =>
@@ -323,19 +339,15 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
         var text = page.Text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
         var fixedMarkers = new[]
         {
-            "Electronic Transactions (continued)",
-            "Checks Paid Electronically",
             "Important Account Information",
             "Posted Description Amount",
             "Electronic Transactions",
             "Days in Statement Period",
             "Transaction Summary",
             "Account Summary",
-            "Daily Balances",
-            "Checks Paid",
+            "Daily Balance Summary",
             "SUNFLOWER BANK",
-            "Deposits",
-            "NONE"
+            "Deposits"
         };
 
         var markerPattern = string.Join("|", fixedMarkers.Select(Regex.Escape));
@@ -344,10 +356,15 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
             markerPattern,
             match => $"\n{match.Value}\n",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        text = Regex.Replace(
+            text,
+            @"(?<!No )Checks Paid Electronically|(?<!No )Checks Paid",
+            match => $"\n{match.Value}\n",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         text = Regex.Replace(
             text,
-            @"STATEMENT DATE\s+\d{2}/\d{2}/\d{4}",
+            @"STATEMENT DATE:\s*\d{2}/\d{2}/\d{2}",
             match => $"\n{match.Value}\n",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         text = Regex.Replace(
@@ -360,6 +377,7 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
             @"(?=\d{2}/\d{2}/\d{2}\s)",
             "\n",
             RegexOptions.CultureInvariant);
+        text = NoChecksMessageRegex().Replace(text, match => $"\n{match.Value}\n");
 
         return text.Split('\n');
     }
@@ -375,26 +393,30 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
         {
             var value when value.Equals("Deposits", StringComparison.OrdinalIgnoreCase) => DepositsSection,
             var value when value.Equals("Electronic Transactions", StringComparison.OrdinalIgnoreCase) => ElectronicTransactionsSection,
-            var value when value.Equals("Electronic Transactions (continued)", StringComparison.OrdinalIgnoreCase) => ElectronicTransactionsSection,
             _ => null
         };
         return section is not null;
     }
 
     private static bool IsNonTransactionBoundary(string line) =>
-        line.Equals("Daily Balances", StringComparison.OrdinalIgnoreCase)
+        line.Equals("Daily Balance Summary", StringComparison.OrdinalIgnoreCase)
         || line.Equals("Important Account Information", StringComparison.OrdinalIgnoreCase)
         || line.Equals("Checks Paid", StringComparison.OrdinalIgnoreCase)
         || line.Equals("Checks Paid Electronically", StringComparison.OrdinalIgnoreCase)
         || line.Equals("Account Summary", StringComparison.OrdinalIgnoreCase)
         || line.Equals("Transaction Summary", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsTerminalBoundary(string line) =>
+        line.Equals("Daily Balance Summary", StringComparison.OrdinalIgnoreCase)
+        || line.Equals("Important Account Information", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsKnownNonRow(string line) =>
-        line.Equals("NONE", StringComparison.OrdinalIgnoreCase)
-        || line.StartsWith("Page ", StringComparison.OrdinalIgnoreCase)
+        line.StartsWith("Page ", StringComparison.OrdinalIgnoreCase)
         || line.Equals("SUNFLOWER BANK", StringComparison.OrdinalIgnoreCase)
         || StatementDateRegex().IsMatch(line)
         || DaysInStatementPeriodRegex().IsMatch(line);
+
+    private static bool IsNoChecksMessage(string line) => NoChecksMessageRegex().IsMatch(line.Trim());
 
     private static bool IsKnownSectionContent(string line) =>
         line.StartsWith("Total ", StringComparison.OrdinalIgnoreCase);
@@ -414,11 +436,17 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
         public List<string> DescriptionContinuation { get; } = new();
     }
 
-    [GeneratedRegex(@"^STATEMENT DATE\s+(?<date>\d{2}/\d{2}/\d{4})$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?<![A-Za-z])STATEMENT DATE:\s*(?<date>\d{2}/\d{2}/\d{2})(?![\d/])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex StatementDateRegex();
 
-    [GeneratedRegex(@"^Days in Statement Period(?:\s+\d+)?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?<![A-Za-z])Days in Statement Period:\s*\d+(?=\s|Page|Electronic Transactions|Deposits|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DaysInStatementPeriodRegex();
+
+    [GeneratedRegex(@"^\s*SUNFLOWER\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex SunflowerHeaderRegex();
+
+    [GeneratedRegex(@"^(?:---\s*)?No Checks Paid(?: Electronically)? in this statement cycle\.(?:\s*---)?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex NoChecksMessageRegex();
 
     [GeneratedRegex(@"^(?<date>\d{2}/\d{2}/\d{2})\s+(?<description>.*?)\s+(?<amount>\S+?)(?<debit>-)?$", RegexOptions.CultureInvariant)]
     private static partial Regex TransactionRowRegex();

@@ -34,6 +34,7 @@ public sealed class SunflowerStatementParserTests
         Assert.Equal("uncategorized", firstDebit.Category);
         Assert.Equal(SunflowerStatementParser.SourceType, firstDebit.Provenance.SourceType);
         Assert.Equal(SunflowerStatementParser.RuleVersion, firstDebit.Provenance.ParserRuleVersion);
+        Assert.Equal(3, result.Rows.Single(row => row.SourceDescription == "BROKERAGE FUNDING").Provenance.SourcePageNumber);
 
         var repeated = result.Rows.Where(row => row.SourceDescription == "REPEATED CAFE").ToList();
         Assert.Equal(2, repeated.Count);
@@ -51,29 +52,29 @@ public sealed class SunflowerStatementParserTests
         var parser = new SunflowerStatementParser();
         Assert.Equal(
             "unsupported_statement_source",
-            parser.Parse(Result("PRAIRIE BANK\nSTATEMENT DATE 02/28/2026\nDays in Statement Period 28\nElectronic Transactions"))
+            parser.Parse(Result("PRAIRIE BANK\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\nPosted Description Amount"))
                 .Failure?.Code);
         Assert.Equal(
             "unsupported_statement_format",
-            parser.Parse(Result("SUNFLOWER BANK\nElectronic Transactions\nPosted Description Amount"))
+            parser.Parse(Result("SUNFLOWER BANK\nSTATEMENT DATE 02/28/2026\nDays in Statement Period 28\nElectronic Transactions\nPosted Description Amount"))
                 .Failure?.Code);
         Assert.Equal(
             "unsupported_statement_source",
-            parser.Parse(Result("A GENERIC SUNFLOWER REFERENCE\nSTATEMENT DATE 02/28/2026\nDays in Statement Period 28\nElectronic Transactions"))
+            parser.Parse(Result("A GENERIC SUNFLOWER REFERENCE\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\nPosted Description Amount"))
                 .Failure?.Code);
     }
 
     [Fact]
-    public void Full_dates_resolve_against_statement_year_across_year_and_century_boundaries()
+    public void Full_dates_use_fixed_statement_century_and_resolve_year_boundary()
     {
         var result = ParseRows(
-            "STATEMENT DATE 01/31/2100",
+            "STATEMENT DATE: 01/31/00",
             "12/31/99 PRIOR YEAR PURCHASE 10.00-",
             "01/01/00 CURRENT YEAR PURCHASE 11.00-");
 
         Assert.True(result.IsSuccess);
-        Assert.Equal(new DateOnly(2099, 12, 31), result.Rows[0].PostedDate);
-        Assert.Equal(new DateOnly(2100, 1, 1), result.Rows[1].PostedDate);
+        Assert.Equal(new DateOnly(1999, 12, 31), result.Rows[0].PostedDate);
+        Assert.Equal(new DateOnly(2000, 1, 1), result.Rows[1].PostedDate);
     }
 
     [Theory]
@@ -91,7 +92,7 @@ public sealed class SunflowerStatementParserTests
     [InlineData("02/01/26 1.00-", "unsupported_transaction_row")]
     public void Invalid_dates_and_amounts_become_controlled_invalid_rows(string row, string error)
     {
-        var parsed = ParseRows("STATEMENT DATE 02/28/2026", row);
+        var parsed = ParseRows("STATEMENT DATE: 02/28/26", row);
 
         Assert.True(parsed.IsSuccess);
         var invalid = Assert.Single(parsed.Rows);
@@ -110,7 +111,7 @@ public sealed class SunflowerStatementParserTests
         try
         {
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
-            var result = ParseRows("STATEMENT DATE 02/28/2026", $"02/01/26 PURCHASE {sourceAmount}-");
+            var result = ParseRows("STATEMENT DATE: 02/28/26", $"02/01/26 PURCHASE {sourceAmount}-");
             Assert.Equal(expected, Assert.Single(result.Rows).Amount);
         }
         finally
@@ -123,7 +124,7 @@ public sealed class SunflowerStatementParserTests
     public void Wrapped_description_is_joined_but_orphan_content_is_surfaced()
     {
         var result = new SunflowerStatementParser().Parse(Result(
-            "SUNFLOWER BANK\nSTATEMENT DATE 02/28/2026\nDays in Statement Period 28\n" +
+            "SUNFLOWER BANK ADJACENT HEADER\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\n" +
             "Electronic Transactions\nPosted Description Amount\n" +
             "02/01/26 SYNTHETIC MERCHANT 10.00-\n  CONTINUED DESCRIPTION\nUNRECOGNIZED ROW"));
 
@@ -137,9 +138,10 @@ public sealed class SunflowerStatementParserTests
     public void Summary_headers_page_markers_balances_disclosures_and_no_checks_create_no_rows()
     {
         var result = new SunflowerStatementParser().Parse(Result(
-            "SUNFLOWER BANK\nSTATEMENT DATE 02/28/2026\nDays in Statement Period 28\nPage 1 of 1\n" +
+            "SUNFLOWER BANK ADJACENT HEADER\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nPAGE 1 OF 1Daily Balance Summary\n02/01 100.00\n" +
             "Account Summary\nTotal Synthetic Debits 10.00\nElectronic Transactions\nPosted Description Amount\n" +
-            "Checks Paid Electronically\nNONE\nChecks Paid\nNONE\nDaily Balances\n02/01 100.00\n" +
+            "Checks Paid Electronically\n--- No Checks Paid Electronically in this statement cycle. ---\n" +
+            "Checks Paid\nNo Checks Paid in this statement cycle.\n" +
             "Important Account Information\nSynthetic disclosure"));
 
         Assert.True(result.IsSuccess);
@@ -150,11 +152,21 @@ public sealed class SunflowerStatementParserTests
     public void Actual_check_rows_fail_closed_without_inventing_check_grammar()
     {
         var result = new SunflowerStatementParser().Parse(Result(
-            "SUNFLOWER BANK\nSTATEMENT DATE 02/28/2026\nDays in Statement Period 28\nElectronic Transactions\n" +
+            "SUNFLOWER BANK\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\n" +
             "Posted Description Amount\nChecks Paid\n1001 02/01/26 10.00-"));
 
         Assert.Equal("unsupported_statement_format", result.Failure?.Code);
         Assert.Empty(result.Rows);
+    }
+
+    [Fact]
+    public void No_check_decoration_is_bounded_to_the_evidenced_shape()
+    {
+        var result = new SunflowerStatementParser().Parse(Result(
+            "SUNFLOWER HEADER\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\n" +
+            "Posted Description Amount\nChecks Paid\n---- No Checks Paid in this statement cycle. ----"));
+
+        Assert.Equal("unsupported_statement_format", result.Failure?.Code);
     }
 
     [Fact]
@@ -188,12 +200,12 @@ public sealed class SunflowerStatementParserTests
     public void Invalid_description_and_deposit_debit_marker_do_not_become_candidates()
     {
         var oversized = ParseRows(
-            "STATEMENT DATE 02/28/2026",
+            "STATEMENT DATE: 02/28/26",
             $"02/01/26 {new string('X', 501)} 1.00-");
         Assert.Contains("invalid_transaction_description", Assert.Single(oversized.Rows).Errors);
 
         var depositDebit = new SunflowerStatementParser().Parse(Result(
-            "SUNFLOWER BANK\nSTATEMENT DATE 02/28/2026\nDays in Statement Period 28\n" +
+            "SUNFLOWER BANK\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\n" +
             "Deposits\nPosted Description Amount\n02/01/26 SYNTHETIC CREDIT 1.00-"));
         var invalidDeposit = Assert.Single(depositDebit.Rows);
         Assert.Equal(ImportedRowClassification.Invalid, invalidDeposit.Classification);
@@ -212,19 +224,62 @@ public sealed class SunflowerStatementParserTests
         Assert.Equal("unsupported_statement_format", result.Failure?.Code);
     }
 
+    [Fact]
+    public void Repeated_identical_statement_dates_are_valid_but_conflicts_fail_closed()
+    {
+        var repeated = MultiPageResult(
+            "SUNFLOWER HEADER\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\nPosted Description Amount\n02/01/26 FIRST 1.00-",
+            "STATEMENT DATE: 02/28/26\nPosted Description Amount\n02/02/26 SECOND 2.00-");
+        Assert.Equal(2, new SunflowerStatementParser().Parse(repeated).Rows.Count);
+
+        var conflicting = MultiPageResult(
+            "SUNFLOWER HEADER\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\nPosted Description Amount",
+            "STATEMENT DATE: 03/31/26");
+        Assert.Equal("unsupported_statement_format", new SunflowerStatementParser().Parse(conflicting).Failure?.Code);
+    }
+
+    [Fact]
+    public void Blank_interstitial_page_deactivates_rows_without_losing_header_only_continuation()
+    {
+        var extraction = MultiPageResult(
+            "SUNFLOWER HEADER\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\nElectronic Transactions\nPosted Description Amount\n02/01/26 FIRST 1.00-",
+            string.Empty,
+            "STATEMENT DATE: 02/28/26\nPosted Description Amount\n02/02/26 SECOND 2.00-");
+
+        var parsed = new SunflowerStatementParser().Parse(extraction);
+        Assert.Equal(new[] { "FIRST", "SECOND" }, parsed.Rows.Select(row => row.SourceDescription));
+        Assert.Equal(3, parsed.Rows[1].Provenance.SourcePageNumber);
+    }
+
+    [Theory]
+    [InlineData("STATEMENT DATE: 02/30/26", "Days in Statement Period: 28")]
+    [InlineData("STATEMENT DATE: 02/28/26", "Days in Statement Period 28")]
+    public void Invalid_statement_metadata_fails_closed(string statementDate, string daysMarker)
+    {
+        var result = Result($"SUNFLOWER HEADER\n{statementDate}\n{daysMarker}\nElectronic Transactions\nPosted Description Amount");
+        Assert.Equal("unsupported_statement_format", new SunflowerStatementParser().Parse(result).Failure?.Code);
+    }
+
     private static SunflowerStatementParseResult ParseRows(string statementDate, params string[] rows) =>
         new SunflowerStatementParser().Parse(Result(string.Join(
             '\n',
-            new[] { "SUNFLOWER BANK", statementDate, "Days in Statement Period 28", "Electronic Transactions", "Posted Description Amount" }
+            new[] { "SUNFLOWER BANK", statementDate, "Days in Statement Period: 28", "Electronic Transactions", "Posted Description Amount" }
                 .Concat(rows))));
 
     private static SunflowerStatementParseResult ParseGeneratedRows(int count)
     {
         var rows = Enumerable.Range(1, count)
             .Select(index => $"02/{((index - 1) % 28) + 1:D2}/26 SYNTHETIC ROW {index:D4} 10.00-");
-        return ParseRows("STATEMENT DATE 02/28/2026", rows.ToArray());
+        return ParseRows("STATEMENT DATE: 02/28/26", rows.ToArray());
     }
 
     private static PdfTextExtractionResult Result(string text) =>
         new(0, 1, text.Length, new[] { new PdfExtractedPage(1, text) });
+
+    private static PdfTextExtractionResult MultiPageResult(params string[] pages) =>
+        new(
+            0,
+            pages.Length,
+            pages.Sum(page => page.Length),
+            pages.Select((page, index) => new PdfExtractedPage(index + 1, page)).ToArray());
 }

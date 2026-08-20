@@ -23,8 +23,8 @@ public static class SunflowerAdversarialFixtures
                 new List<string>
                 {
                     "PRAIRIE COMMUNITY BANK",
-                    "STATEMENT DATE 02/28/2026",
-                    "Days in Statement Period 28",
+                    "STATEMENT DATE: 02/28/26",
+                    "Days in Statement Period: 28",
                     "Electronic Transactions",
                     "Posted Description Amount",
                     "02/14/26 SAMPLE PURCHASE 19.25-"
@@ -74,13 +74,9 @@ public static class SunflowerAdversarialFixtures
 
             if (page == 0)
             {
-                lines.Add("STATEMENT DATE 02/28/2026");
-                lines.Add("Days in Statement Period 28");
+                lines.Add("STATEMENT DATE: 02/28/26");
+                lines.Add("Days in Statement Period: 28");
                 lines.Add("Electronic Transactions");
-            }
-            else
-            {
-                lines.Add("Electronic Transactions (continued)");
             }
             lines.Add("Posted Description Amount");
 

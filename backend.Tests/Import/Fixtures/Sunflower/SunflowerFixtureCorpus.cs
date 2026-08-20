@@ -45,11 +45,10 @@ public static class SunflowerFixtureCorpus
                 true,
                 new List<string>
                 {
-                    "SUNFLOWER BANK",
-                    "FIRST NATIONAL 1870",
-                    "STATEMENT DATE 02/28/2026",
-                    "Days in Statement Period 28",
-                    "Page 1 of 4",
+                    "SUNFLOWER BANKFIRST NATIONAL 1870",
+                    "STATEMENT DATE: 02/28/26",
+                    "Days in Statement Period: 28",
+                    "PAGE 1 OF 3",
                     "Account Summary",
                     "Total Synthetic Credits 2,468.25",
                     "Deposits",
@@ -67,43 +66,36 @@ public static class SunflowerFixtureCorpus
                     "02/10/26 TRANSFER TO SAVINGS 100.00-"
                 }),
             new(
-                "continued-transactions",
+                "reconciliation-insert",
+                false,
+                Array.Empty<string>()),
+            new(
+                "header-only-continued-transactions",
                 true,
                 new List<string>
                 {
-                    "SUNFLOWER BANK",
-                    "Page 2 of 4",
-                    "Electronic Transactions (continued)",
-                    "Posted Description Amount",
+                    "STATEMENT DATE: 02/28/26",
+                    "PAGE 2 OF 3Posted Description Amount",
                     "02/11/26 BROKERAGE FUNDING 75.00-",
                     "02/12/26 REPEATED CAFE 8.50-",
                     "02/12/26 REPEATED CAFE 8.50-",
-                    "02/13/26 SOURCE DIRECTION UNKNOWN 12.34",
-                    "Checks Paid Electronically",
-                    "NONE",
-                    "Checks Paid",
-                    "NONE"
+                    "02/13/26 SOURCE DIRECTION UNKNOWN 12.34"
                 }),
             new(
-                "daily-balances",
+                "balances-checks-and-disclosures",
                 false,
                 new List<string>
                 {
-                    "SUNFLOWER BANK",
-                    "Page 3 of 4",
-                    "Daily Balances",
+                    "STATEMENT DATE: 02/28/26",
+                    "PAGE 3 OF 3Daily Balance Summary",
                     "02/03 3100.00",
                     "02/10 1520.35",
                     "02/17 1430.10",
-                    "02/28 1398.27"
-                }),
-            new(
-                "disclosures",
-                false,
-                new List<string>
-                {
-                    "SUNFLOWER BANK",
-                    "Page 4 of 4",
+                    "02/28 1398.27",
+                    "Checks Paid Electronically",
+                    "--- No Checks Paid Electronically in this statement cycle. ---",
+                    "Checks Paid",
+                    "No Checks Paid in this statement cycle.",
                     "Important Account Information",
                     "This page contains synthetic disclosure text for parser fixtures only.",
                     "No transaction rows appear on this page."

@@ -56,7 +56,7 @@ public sealed class SunflowerStatementParserTests
                 .Failure?.Code);
         Assert.Equal(
             "unsupported_statement_format",
-            parser.Parse(Result("SUNFLOWER BANK\nSTATEMENT DATE 02/28/2026\nDays in Statement Period 28\nElectronic Transactions\nPosted Description Amount"))
+            parser.Parse(Result("SUNFLOWER BANK\nSTATEMENT DATE: 02/28/26\nDays in Statement Period 28\nElectronic Transactions\nPosted Description Amount"))
                 .Failure?.Code);
         Assert.Equal(
             "unsupported_statement_source",
@@ -88,6 +88,30 @@ public sealed class SunflowerStatementParserTests
             "Posted Description Amount\n02/01/26 PURCHASE 1.00-"));
         Assert.True(concatenatedBrand.IsSuccess);
         Assert.Single(concatenatedBrand.Rows);
+    }
+
+    [Fact]
+    public void Page_local_source_identity_accepts_only_brand_before_strong_same_page_metadata()
+    {
+        var parser = new SunflowerStatementParser();
+        var derivedLayout = parser.Parse(MultiPageResult(
+            "Deposits\nElectronic Transactions",
+            "Deposits\nSunflowerBank SYNTHETIC HEADER\nSTATEMENTDATE:02/28/26\n" +
+            "DaysinStatementPeriod:28Deposits\nElectronic Transactions\n" +
+            "PostedDescriptionAmount\n02/01/26 SYNTHETIC PURCHASE 1.00-"));
+
+        Assert.True(derivedLayout.IsSuccess, derivedLayout.Failure?.Code);
+        Assert.Single(derivedLayout.Rows);
+
+        var lateBrand = parser.Parse(Result(
+            "STATEMENTDATE:02/28/26\nSunflowerBank SYNTHETIC DISCLOSURE\n" +
+            "DaysinStatementPeriod:28\nElectronic Transactions\nPostedDescriptionAmount"));
+        Assert.Equal("unsupported_statement_source", lateBrand.Failure?.Code);
+
+        var disclosureOnly = parser.Parse(MultiPageResult(
+            "STATEMENTDATE:02/28/26\nDaysinStatementPeriod:28\nElectronic Transactions\nPostedDescriptionAmount",
+            "SunflowerBank SYNTHETIC DISCLOSURE"));
+        Assert.Equal("unsupported_statement_source", disclosureOnly.Failure?.Code);
     }
 
     [Fact]

@@ -215,14 +215,43 @@ public sealed class ImportPreviewApiTests
         using var owner = await app.CreateAuthenticatedUserAsync("preview-concatenated-brand@example.com");
         var lines = new[]
         {
-            "SunflowerBank FIRST NATIONAL 1870",
-            "STATEMENT DATE: 02/28/26",
+            "-SunflowerBank FIRST NATIONAL 1870 STATEMENT DATE: 02/28/26",
             "Days in Statement Period: 28",
             "Electronic Transactions",
-            "Posted Description Amount",
+            "-Posted Description Amount",
             "02/05/26 SYNTHETIC MARKET 42.16-"
         };
         using var content = PdfUpload(SyntheticPdfBuilder.Build(new IReadOnlyList<string>[] { lines }));
+
+        var response = await owner.Client.PostAsync("/api/import-previews/sunflower", content);
+        var preview = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var row = Assert.Single(preview.GetProperty("rows").EnumerateArray());
+        Assert.Equal("SYNTHETIC MARKET", row.GetProperty("sourceDescription").GetString());
+        Assert.Equal(1, await app.CountImportPreviewBatchesAsync(owner.Id));
+        Assert.Equal(0, await app.CountExpensesAsync());
+    }
+
+    [Fact]
+    public async Task Derived_page_order_and_header_whitespace_flow_through_extractor_and_preview_api()
+    {
+        await using var app = new FinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("preview-derived-layout@example.com");
+        var pages = new IReadOnlyList<string>[]
+        {
+            new[] { "Deposits", "Electronic Transactions" },
+            new[]
+            {
+                "Deposits",
+                "-SunflowerBank SYNTHETIC HEADER STATEMENTDATE:02/28/26",
+                "DaysinStatementPeriod:28Deposits",
+                "Electronic Transactions",
+                "-PostedDescriptionAmount",
+                "02/05/26 SYNTHETIC MARKET 42.16-"
+            }
+        };
+        using var content = PdfUpload(SyntheticPdfBuilder.Build(pages));
 
         var response = await owner.Client.PostAsync("/api/import-previews/sunflower", content);
         var preview = await response.Content.ReadFromJsonAsync<JsonElement>();

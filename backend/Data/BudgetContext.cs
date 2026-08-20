@@ -12,6 +12,8 @@ public class BudgetContext : IdentityDbContext<ApplicationUser>, IDataProtection
     public DbSet<Expense> Expenses { get; set; }
     public DbSet<BudgetLimit> BudgetLimits { get; set; }
     public DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
+    public DbSet<ImportPreviewBatch> ImportPreviewBatches { get; set; }
+    public DbSet<ImportPreviewRow> ImportPreviewRows { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -34,6 +36,46 @@ public class BudgetContext : IdentityDbContext<ApplicationUser>, IDataProtection
             .WithMany()
             .HasForeignKey(e => e.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ImportPreviewBatch>(batch =>
+        {
+            batch.ToTable(table =>
+            {
+                table.HasCheckConstraint("CK_ImportPreviewBatch_DigestLength", "octet_length(\"DocumentDigest\") = 32");
+                table.HasCheckConstraint("CK_ImportPreviewBatch_Expiry", "\"ExpiresAt\" > \"CreatedAt\"");
+                table.HasCheckConstraint("CK_ImportPreviewBatch_SourceType", "\"SourceType\" = 'sunflower_pdf'");
+            });
+            batch.Property(value => value.SourceType).HasMaxLength(50);
+            batch.Property(value => value.ParserRuleVersion).HasMaxLength(100);
+            batch.Property(value => value.DocumentDigest).HasColumnType("bytea").HasMaxLength(32);
+            batch.Property(value => value.Lifecycle).HasConversion<string>().HasMaxLength(20);
+            batch.HasOne(value => value.Owner).WithMany().HasForeignKey(value => value.OwnerId)
+                .OnDelete(DeleteBehavior.Cascade);
+            batch.HasIndex(value => new { value.OwnerId, value.SourceType, value.DocumentDigest })
+                .IsUnique()
+                .HasFilter("\"Lifecycle\" = 'Open'");
+            batch.HasIndex(value => value.ExpiresAt);
+        });
+
+        modelBuilder.Entity<ImportPreviewRow>(row =>
+        {
+            row.ToTable(table => table.HasCheckConstraint(
+                "CK_ImportPreviewRow_PositiveAmount", "\"Amount\" IS NULL OR \"Amount\" > 0"));
+            row.Property(value => value.Amount).HasColumnType("numeric(18,2)");
+            row.Property(value => value.PostedDate).HasColumnType("date");
+            row.Property(value => value.Direction).HasConversion<string>().HasMaxLength(20);
+            row.Property(value => value.SourceDescription).HasMaxLength(500);
+            row.Property(value => value.SourceSection).HasMaxLength(100);
+            row.Property(value => value.Classification).HasConversion<string>().HasMaxLength(30);
+            row.Property(value => value.ValidationErrorCodes).HasColumnType("jsonb");
+            row.Property(value => value.WarningCodes).HasColumnType("jsonb");
+            row.Property(value => value.DuplicateExpenseIds).HasColumnType("jsonb");
+            row.Property(value => value.EditableExpenseDescription).HasMaxLength(500);
+            row.Property(value => value.Category).HasMaxLength(100);
+            row.HasOne(value => value.Batch).WithMany(value => value.Rows).HasForeignKey(value => value.BatchId)
+                .OnDelete(DeleteBehavior.Cascade);
+            row.HasIndex(value => new { value.BatchId, value.SourceRowOrdinal }).IsUnique();
+        });
 
         modelBuilder.Entity<BudgetLimit>()
             .HasOne(b => b.User)

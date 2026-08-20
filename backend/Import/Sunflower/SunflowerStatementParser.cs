@@ -12,9 +12,12 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
     private const string DepositsSection = "deposits";
     private const string ElectronicTransactionsSection = "electronic_transactions";
 
-    public SunflowerStatementParseResult Parse(PdfTextExtractionResult extraction)
+    public SunflowerStatementParseResult Parse(
+        PdfTextExtractionResult extraction,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(extraction);
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (!HasOrderedPages(extraction.Pages))
         {
@@ -22,12 +25,18 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
         }
 
         var statementText = string.Join('\n', extraction.Pages.Select(page => page.Text));
+        cancellationToken.ThrowIfCancellationRequested();
         if (!HasSunflowerHeaderIdentity(statementText))
         {
             return SunflowerStatementParseResult.Failed(SunflowerStatementParseFailure.UnsupportedSource);
         }
 
         var statementDates = extraction.Pages
+            .Select(page =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return page;
+            })
             .SelectMany(page => StatementDateRegex().Matches(page.Text).Select(match => match.Groups["date"].Value))
             .Select(value => TryParseStatementDate(value, out var date) ? date : (DateOnly?)null)
             .Where(date => date.HasValue)
@@ -50,6 +59,7 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
 
         foreach (var page in extraction.Pages)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             string? section = null;
             string? pendingSection = null;
             PendingRow? pendingRow = null;
@@ -68,6 +78,7 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
 
             foreach (var sourceLine in SplitLines(page).Select(line => new SourceLine(page.PageNumber, line)))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var trimmed = sourceLine.Text.Trim();
                 if (trimmed.Length == 0)
                 {

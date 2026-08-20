@@ -4,6 +4,7 @@ using System.Text.Json;
 using BudgetPlanner.Tests.Financial;
 using BudgetPlanner.Tests.Import.Fixtures.Sunflower;
 using BudgetPlanner.Import;
+using BudgetPlanner.Import.Sunflower;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -191,6 +192,106 @@ public sealed class ImportPreviewApiTests
         Assert.Equal(0, await app.CountImportPreviewBatchesAsync(owner.Id));
     }
 
+    [Fact]
+    public async Task Real_contained_extractor_flows_through_preview_api_and_persistence()
+    {
+        await using var app = new FinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("preview-real-path@example.com");
+        using var content = PdfUpload(SunflowerFixtureCorpus.CreateRepresentativePdf());
+
+        var response = await owner.Client.PostAsync("/api/import-previews/sunflower", content);
+        var preview = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(13, preview.GetProperty("rows").GetArrayLength());
+        Assert.Equal(1, await app.CountImportPreviewBatchesAsync(owner.Id));
+        Assert.Equal(0, await app.CountExpensesAsync());
+    }
+
+    [Theory]
+    [InlineData("malformed", "invalid_pdf")]
+    [InlineData("encrypted", "encrypted_pdf")]
+    [InlineData("image_only", "image_only_pdf")]
+    public async Task Unsafe_pdf_failures_have_stable_safe_api_errors(string kind, string expectedCode)
+    {
+        await using var app = new FinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync($"preview-{kind}@example.com");
+        var pdf = kind switch
+        {
+            "encrypted" => ParserSpecificPdfFixtures.EncryptedPdf(),
+            "image_only" => ParserSpecificPdfFixtures.ImageOnlyPdf(),
+            _ => ParserSpecificPdfFixtures.InvalidPdf()
+        };
+        using var content = PdfUpload(pdf);
+
+        var response = await owner.Client.PostAsync("/api/import-previews/sunflower", content);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(expectedCode, error.GetProperty("code").GetString());
+        Assert.DoesNotContain("advisory-name", await response.Content.ReadAsStringAsync());
+        Assert.Equal(0, await app.CountImportPreviewBatchesAsync(owner.Id));
+        Assert.Equal(0, await app.CountExpensesAsync());
+    }
+
+    [Theory]
+    [InlineData("unsupported_source", "unsupported_statement_source")]
+    [InlineData("unsupported_format", "unsupported_statement_format")]
+    public async Task Unsupported_statement_failures_have_stable_safe_api_errors(string kind, string expectedCode)
+    {
+        await using var app = new FinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync($"preview-{kind}@example.com");
+        var header = kind == "unsupported_source" ? "PRAIRIE BANK" : "SUNFLOWER BANKFIRST NATIONAL 1870";
+        var lines = kind == "unsupported_source"
+            ? new[] { header, "STATEMENT DATE: 02/28/26", "Days in Statement Period: 28", "Electronic Transactions", "Posted Description Amount" }
+            : new[] { header, "STATEMENT DATE: 02/28/26", "Electronic Transactions", "Posted Description Amount" };
+        using var content = PdfUpload(SyntheticPdfBuilder.Build(new IReadOnlyList<string>[] { lines }));
+
+        var response = await owner.Client.PostAsync("/api/import-previews/sunflower", content);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(expectedCode, error.GetProperty("code").GetString());
+        Assert.Equal(0, await app.CountImportPreviewBatchesAsync(owner.Id));
+    }
+
+    [Fact]
+    public async Task Parser_timeout_releases_admission_and_persists_nothing()
+    {
+        await using var app = new BlockingParserFinancialApiTestApplication(TimeSpan.FromMilliseconds(50));
+        using var owner = await app.CreateAuthenticatedUserAsync("preview-timeout@example.com");
+        using var content = PdfUpload(SunflowerFixtureCorpus.CreateRepresentativePdf());
+
+        var response = await owner.Client.PostAsync("/api/import-previews/sunflower", content);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var admission = app.Services.GetRequiredService<IImportPreviewAdmission>();
+        using var releasedLease = admission.TryAcquire(owner.Id);
+
+        Assert.Equal(HttpStatusCode.RequestTimeout, response.StatusCode);
+        Assert.Equal("processing_timed_out", error.GetProperty("code").GetString());
+        Assert.NotNull(releasedLease);
+        Assert.Equal(0, await app.CountImportPreviewBatchesAsync(owner.Id));
+        Assert.Equal(0, await app.CountExpensesAsync());
+    }
+
+    [Fact]
+    public async Task Parser_request_cancellation_releases_admission_and_persists_nothing()
+    {
+        await using var app = new BlockingParserFinancialApiTestApplication(TimeSpan.FromSeconds(5));
+        using var owner = await app.CreateAuthenticatedUserAsync("preview-cancel@example.com");
+        using var content = PdfUpload(SunflowerFixtureCorpus.CreateRepresentativePdf());
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            owner.Client.PostAsync("/api/import-previews/sunflower", content, cancellation.Token));
+        var admission = app.Services.GetRequiredService<IImportPreviewAdmission>();
+        using var releasedLease = admission.TryAcquire(owner.Id);
+
+        Assert.NotNull(releasedLease);
+        Assert.Equal(0, await app.CountImportPreviewBatchesAsync(owner.Id));
+        Assert.Equal(0, await app.CountExpensesAsync());
+    }
+
     private static MultipartFormDataContent PdfUpload(byte[] bytes)
     {
         var content = new MultipartFormDataContent();
@@ -231,6 +332,33 @@ internal sealed class ImmediateSyntheticExtractor : IPdfTextExtractor
             .ToList();
         return Task.FromResult(PdfTextExtractionOutcome.Success(new PdfTextExtractionResult(
             pdf.Length, pages.Count, pages.Sum(page => page.Text.Length), pages)));
+    }
+}
+
+internal sealed class BlockingParserFinancialApiTestApplication(TimeSpan timeout) : FinancialApiTestApplication
+{
+    protected override void ConfigureAdditionalServices(IServiceCollection services)
+    {
+        services.RemoveAll<IPdfTextExtractor>();
+        services.AddSingleton<IPdfTextExtractor, ImmediateSyntheticExtractor>();
+        services.RemoveAll<ISunflowerStatementParser>();
+        services.AddSingleton<ISunflowerStatementParser, BlockingSunflowerParser>();
+        services.RemoveAll<ImportPreviewProcessingOptions>();
+        services.AddSingleton(new ImportPreviewProcessingOptions { Timeout = timeout });
+    }
+}
+
+internal sealed class BlockingSunflowerParser : ISunflowerStatementParser
+{
+    public SunflowerStatementParseResult Parse(
+        PdfTextExtractionResult extraction,
+        CancellationToken cancellationToken = default)
+    {
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Thread.SpinWait(10_000);
+        }
     }
 }
 

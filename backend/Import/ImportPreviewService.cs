@@ -24,11 +24,17 @@ public interface IImportPreviewService
     Task<ImportPreviewOperation> UpdateRowAsync(string userId, Guid batchId, Guid rowId, UpdateImportPreviewRowRequest request, CancellationToken cancellationToken);
 }
 
+public sealed class ImportPreviewProcessingOptions
+{
+    public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(10);
+}
+
 public sealed class ImportPreviewService(
     BudgetContext context,
     IPdfTextExtractor extractor,
     ISunflowerStatementParser parser,
-    TimeProvider clock) : IImportPreviewService
+    TimeProvider clock,
+    ImportPreviewProcessingOptions processingOptions) : IImportPreviewService
 {
     public const int MaximumUploadBytes = 10 * 1024 * 1024;
     private static readonly TimeSpan PreviewLifetime = TimeSpan.FromHours(24);
@@ -65,18 +71,43 @@ public sealed class ImportPreviewService(
             return Failed("processing_cancelled", "Statement processing was cancelled.");
         }
 
-        var existing = await FindOpenByDigestAsync(userId, SunflowerStatementParser.SourceType, digest, cancellationToken);
-        if (existing is not null)
-            return new(ToResponse(existing), null, true);
-
-        PdfTextExtractionOutcome extraction;
+        SunflowerStatementParseResult parsed;
         try
         {
-            extraction = await extractor.ExtractAsync(pdf, cancellationToken);
+            using var processingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            processingCts.CancelAfter(processingOptions.Timeout);
+            var processingToken = processingCts.Token;
+
+            var existing = await FindOpenByDigestAsync(
+                userId, SunflowerStatementParser.SourceType, digest, processingToken);
+            if (existing is not null)
+                return new(ToResponse(existing), null, true);
+
+            PdfTextExtractionOutcome extraction;
+            try
+            {
+                extraction = await extractor.ExtractAsync(pdf, processingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return ProcessingInterrupted(cancellationToken);
+            }
+            catch
+            {
+                return Failed("processing_failed", "The PDF could not be processed safely.");
+            }
+
+            if (!extraction.IsSuccess)
+                return extraction.Failure!.Code == "cancelled"
+                    ? ProcessingInterrupted(cancellationToken)
+                    : MapExtractionFailure(extraction.Failure);
+
+            processingToken.ThrowIfCancellationRequested();
+            parsed = parser.Parse(extraction.Result!, processingToken);
         }
         catch (OperationCanceledException)
         {
-            return Failed("processing_cancelled", "Statement processing was cancelled.");
+            return ProcessingInterrupted(cancellationToken);
         }
         catch
         {
@@ -85,24 +116,6 @@ public sealed class ImportPreviewService(
         finally
         {
             CryptographicOperations.ZeroMemory(pdf);
-        }
-
-        if (!extraction.IsSuccess)
-            return MapExtractionFailure(extraction.Failure!);
-
-        SunflowerStatementParseResult parsed;
-        try
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            parsed = parser.Parse(extraction.Result!);
-        }
-        catch (OperationCanceledException)
-        {
-            return Failed("processing_cancelled", "Statement processing was cancelled.");
-        }
-        catch
-        {
-            return Failed("processing_failed", "The PDF could not be processed safely.");
         }
         if (!parsed.IsSuccess)
             return Failed(parsed.Failure!.Code, parsed.Failure.Message);
@@ -281,6 +294,11 @@ public sealed class ImportPreviewService(
     };
 
     private static ImportPreviewOperation Failed(string code, string message) => new(null, new(code, message));
+
+    private static ImportPreviewOperation ProcessingInterrupted(CancellationToken requestToken) =>
+        requestToken.IsCancellationRequested
+            ? Failed("processing_cancelled", "Statement processing was cancelled.")
+            : Failed("processing_timed_out", "Statement processing timed out.");
 
     private static ImportPreviewResponse ToResponse(ImportPreviewBatch batch) => new(
         batch.Id, batch.SourceType, batch.ParserRuleVersion, batch.CreatedAt, batch.ExpiresAt,

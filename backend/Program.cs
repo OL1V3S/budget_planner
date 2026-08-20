@@ -36,6 +36,7 @@ builder.Services.AddSingleton<ISunflowerStatementParser, SunflowerStatementParse
 builder.Services.AddSingleton<IImportPreviewAdmission, ImportPreviewAdmission>();
 builder.Services.AddScoped<ImportPreviewAdmissionFilter>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton(new ImportPreviewProcessingOptions());
 builder.Services.AddScoped<IImportPreviewService, ImportPreviewService>();
 
 builder.Services

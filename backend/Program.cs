@@ -12,6 +12,7 @@ using BudgetPlanner.Authentication;
 using BudgetPlanner.Configuration;
 using Microsoft.Extensions.Options;
 using BudgetPlanner.Import;
+using BudgetPlanner.Import.Sunflower;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,6 +32,12 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllers();
 builder.Services.AddSingleton(new PdfExtractionOptions());
 builder.Services.AddSingleton<IPdfTextExtractor, ContainedPdfTextExtractor>();
+builder.Services.AddSingleton<ISunflowerStatementParser, SunflowerStatementParser>();
+builder.Services.AddSingleton<IImportPreviewAdmission, ImportPreviewAdmission>();
+builder.Services.AddScoped<ImportPreviewAdmissionFilter>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton(new ImportPreviewProcessingOptions());
+builder.Services.AddScoped<IImportPreviewService, ImportPreviewService>();
 
 builder.Services
     .AddOptions<EmailSettingsOptions>()

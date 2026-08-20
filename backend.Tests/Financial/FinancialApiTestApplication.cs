@@ -16,7 +16,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace BudgetPlanner.Tests.Financial;
 
-internal sealed class FinancialApiTestApplication : FinancialApiTestApplicationBase
+internal class FinancialApiTestApplication : FinancialApiTestApplicationBase
 {
     private readonly string _databaseName = $"financial-api-tests-{Guid.NewGuid()}";
 
@@ -25,6 +25,8 @@ internal sealed class FinancialApiTestApplication : FinancialApiTestApplicationB
         services.AddDbContext<BudgetContext>(options =>
             options.UseInMemoryDatabase(_databaseName));
     }
+
+    protected override void ConfigureAdditionalServices(IServiceCollection services) { }
 }
 
 internal abstract class FinancialApiTestApplicationBase : WebApplicationFactory<Program>
@@ -38,6 +40,7 @@ internal abstract class FinancialApiTestApplicationBase : WebApplicationFactory<
     protected abstract void ConfigureDatabase(IServiceCollection services);
 
     protected virtual void InitializeDatabase(IServiceProvider services) { }
+    protected virtual void ConfigureAdditionalServices(IServiceCollection services) { }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -50,6 +53,7 @@ internal abstract class FinancialApiTestApplicationBase : WebApplicationFactory<
 
             services.RemoveAll<IEmailService>();
             services.AddSingleton<IEmailService, NoOpEmailService>();
+            ConfigureAdditionalServices(services);
         });
     }
 
@@ -154,6 +158,20 @@ internal abstract class FinancialApiTestApplicationBase : WebApplicationFactory<
         using var scope = Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<BudgetContext>();
         return await context.Expenses.AsNoTracking().SingleOrDefaultAsync(expense => expense.Id == id);
+    }
+
+    public async Task<int> CountExpensesAsync()
+    {
+        using var scope = Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<BudgetContext>();
+        return await context.Expenses.CountAsync();
+    }
+
+    public async Task<int> CountImportPreviewBatchesAsync(string userId)
+    {
+        using var scope = Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<BudgetContext>();
+        return await context.ImportPreviewBatches.CountAsync(value => value.OwnerId == userId);
     }
 
     public async Task<IReadOnlyList<BudgetLimit>> FindBudgetLimitsAsync(

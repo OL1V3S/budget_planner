@@ -5,7 +5,7 @@ using Npgsql;
 
 namespace BudgetPlanner.Tests.Financial;
 
-internal sealed class PostgreSqlFinancialApiTestApplication
+internal class PostgreSqlFinancialApiTestApplication
     : FinancialApiTestApplicationBase
 {
     public const string ConnectionEnvironmentVariable =

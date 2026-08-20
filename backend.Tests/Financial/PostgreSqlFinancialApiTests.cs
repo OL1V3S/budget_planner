@@ -7,6 +7,9 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using BudgetPlanner.Tests.Import.Fixtures.Sunflower;
+using BudgetPlanner.Import;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace BudgetPlanner.Tests.Financial;
 
@@ -156,6 +159,31 @@ public sealed class PostgreSqlFinancialApiTests
     }
 
     [PostgreSqlFact]
+    public async Task Import_preview_migration_persists_owned_batch_rows_without_creating_expenses()
+    {
+        await using var app = new PostgreSqlImportPreviewTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("postgres-preview@example.com");
+        using var upload = new MultipartFormDataContent();
+        upload.Add(new ByteArrayContent(SunflowerFixtureCorpus.CreateRepresentativePdf()), "file", "synthetic.pdf");
+
+        var response = await owner.Client.PostAsync("/api/import-previews/sunflower", upload);
+        var preview = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.True(
+            response.StatusCode == HttpStatusCode.Created,
+            $"Expected preview creation, received {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+        using var scope = app.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<BudgetContext>();
+        var batchId = preview.GetProperty("batchId").GetGuid();
+        var batch = await context.ImportPreviewBatches.AsNoTracking()
+            .Include(value => value.Rows).SingleAsync(value => value.Id == batchId);
+        Assert.Equal(owner.Id, batch.OwnerId);
+        Assert.Equal(32, batch.DocumentDigest.Length);
+        Assert.Equal(13, batch.Rows.Count);
+        Assert.False(await context.Expenses.AnyAsync());
+    }
+
+    [PostgreSqlFact]
     public async Task Budget_create_read_upsert_and_delete_use_relational_month_query()
     {
         await using var app = new PostgreSqlFinancialApiTestApplication();
@@ -200,6 +228,15 @@ public sealed class PostgreSqlFinancialApiTests
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
         Assert.Empty(await app.FindBudgetLimitsAsync(owner.Id, "food"));
         Assert.Single(await app.FindBudgetLimitsAsync(other.Id, "hidden"));
+    }
+}
+
+internal sealed class PostgreSqlImportPreviewTestApplication : PostgreSqlFinancialApiTestApplication
+{
+    protected override void ConfigureAdditionalServices(IServiceCollection services)
+    {
+        services.RemoveAll<IPdfTextExtractor>();
+        services.AddSingleton<IPdfTextExtractor, BudgetPlanner.Tests.Import.ImmediateSyntheticExtractor>();
     }
 }
 

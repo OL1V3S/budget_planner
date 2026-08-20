@@ -1,7 +1,7 @@
 using System.Security.Claims;
-using System.Text.RegularExpressions;
 using BudgetPlanner.Contracts.Expenses;
 using BudgetPlanner.Data;
+using BudgetPlanner.Import;
 using BudgetPlanner.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,7 +14,6 @@ namespace BudgetPlanner.Controllers;
 [Authorize]
 public class ExpensesController : ControllerBase
 {
-    private const decimal MaxExpenseAmount = 9999999999999999.99m;
     private readonly BudgetContext _context;
 
     public ExpensesController(BudgetContext context)
@@ -156,55 +155,26 @@ public class ExpensesController : ControllerBase
         out string normalizedDescription,
         out string normalizedCategory)
     {
-        normalizedDescription = (description ?? string.Empty).Trim();
-        normalizedCategory = NormalizeCategory(category);
-
-        if (amount <= 0m)
+        normalizedDescription = ExpenseInputRules.NormalizeDescription(description);
+        normalizedCategory = ExpenseInputRules.NormalizeCategory(category);
+        foreach (var error in ExpenseInputRules.Validate(amount, DateOnly.MinValue, normalizedDescription, normalizedCategory))
         {
-            ModelState.AddModelError("amount", "Amount must be greater than zero.");
-        }
-
-        if (amount > MaxExpenseAmount)
-        {
-            ModelState.AddModelError("amount", "Amount exceeds the supported monetary range.");
-        }
-
-        if (decimal.Round(amount, 2) != amount)
-        {
-            ModelState.AddModelError("amount", "Amount must have at most two decimal places.");
-        }
-
-        if (string.IsNullOrWhiteSpace(normalizedDescription))
-        {
-            ModelState.AddModelError("description", "Description is required.");
-        }
-        else if (normalizedDescription.Length > 500)
-        {
-            ModelState.AddModelError("description", "Description must be 500 characters or fewer.");
-        }
-
-        if (string.IsNullOrWhiteSpace(normalizedCategory))
-        {
-            ModelState.AddModelError("category", "Category is required.");
-        }
-        else if (normalizedCategory.Length > 100)
-        {
-            ModelState.AddModelError("category", "Category must be 100 characters or fewer.");
-        }
-        else if (normalizedCategory == "other")
-        {
-            ModelState.AddModelError(
-                "category",
-                "Category 'other' is reserved for the UI custom-category selector.");
+            var (field, message) = error switch
+            {
+                "amount_must_be_positive" => ("amount", "Amount must be greater than zero."),
+                "amount_out_of_range" => ("amount", "Amount exceeds the supported monetary range."),
+                "amount_precision_invalid" => ("amount", "Amount must have at most two decimal places."),
+                "description_required" => ("description", "Description is required."),
+                "description_too_long" => ("description", "Description must be 500 characters or fewer."),
+                "category_required" => ("category", "Category is required."),
+                "category_too_long" => ("category", "Category must be 100 characters or fewer."),
+                "category_reserved" => ("category", "Category 'other' is reserved for the UI custom-category selector."),
+                _ => ("request", "The expense is invalid.")
+            };
+            ModelState.AddModelError(field, message);
         }
 
         return ModelState.IsValid;
-    }
-
-    private static string NormalizeCategory(string? category)
-    {
-        var trimmed = (category ?? string.Empty).Trim();
-        return Regex.Replace(trimmed, @"\s+", " ").ToLowerInvariant();
     }
 
     private static ExpenseResponse ToResponse(Expense expense)

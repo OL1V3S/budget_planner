@@ -8,9 +8,12 @@ import { normalizeText, isDefaultCategory } from "../../../utils/text";
 import ExpenseForm from "../../expenses/components/ExpenseForm";
 import ExpenseFilters from "../../expenses/components/ExpenseFilters";
 import ExpenseList from "../../expenses/components/ExpenseList";
+import ImportPreviewPanel from "../../importPreview/components/ImportPreviewPanel";
+import { useImportPreview } from "../../importPreview/hooks/useImportPreview";
 const ENTRIES_PER_PAGE = 10;
 
 export default function TransactionsPage() {
+  const importState = useImportPreview();
   const {
     expenses,
     loading: expensesLoading,
@@ -137,6 +140,8 @@ export default function TransactionsPage() {
           <p className="muted">Record, review, and organize your expenses.</p>
         </div>
       </header>
+
+      <ImportPreviewPanel importState={importState} />
   
       <ExpenseForm
         loading={expensesLoading}

@@ -274,7 +274,7 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
         stream.Close();
     }
 
-    private static async Task<byte[]> ReadBoundedAsync(Stream stream, int limit, CancellationToken token)
+    internal static async Task<byte[]> ReadBoundedAsync(Stream stream, int limit, CancellationToken token)
     {
         using var output = new MemoryStream(Math.Min(limit, 8192));
         var buffer = new byte[8192];
@@ -287,7 +287,7 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
         }
     }
 
-    private static PdfTextExtractionOutcome ParseResponse(byte[] response, int expectedInputBytes)
+    internal static PdfTextExtractionOutcome ParseResponse(byte[] response, int expectedInputBytes)
     {
         if (response.Length < 6 || !response.AsSpan(0, 4).SequenceEqual(PdfWorkerProtocol.ResponseMagic) ||
             response[4] != PdfWorkerProtocol.Version)
@@ -325,17 +325,61 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
             var pages = new List<PdfExtractedPage>(pageCount);
             var actualCharacters = 0;
             var actualUtf8Bytes = 0;
+            var actualLayoutWords = 0;
+            var actualLayoutCharacters = 0;
+            var actualLayoutUtf8Bytes = 0;
             for (var index = 0; index < pageCount; index++)
             {
                 var pageNumber = ReadInt32(response, ref offset);
                 var textLength = ReadInt32(response, ref offset);
-                if (pageNumber != index + 1 || textLength < 0 || offset + textLength > response.Length)
+                if (pageNumber != index + 1 || textLength < 0 || textLength > response.Length - offset)
                     throw new InvalidDataException();
                 var text = decoder.GetString(response, offset, textLength);
                 offset += textLength;
                 actualCharacters = checked(actualCharacters + text.Length);
                 actualUtf8Bytes = checked(actualUtf8Bytes + textLength);
-                pages.Add(new PdfExtractedPage(pageNumber, text));
+                var wordCount = ReadInt32(response, ref offset);
+                actualLayoutWords = checked(actualLayoutWords + wordCount);
+                if (wordCount < 0 || actualLayoutWords > PdfWorkerProtocol.MaxLayoutWords)
+                    throw new InvalidDataException();
+
+                var words = new List<PdfExtractedWord>(wordCount);
+                for (var wordIndex = 0; wordIndex < wordCount; wordIndex++)
+                {
+                    var ordinal = ReadInt32(response, ref offset);
+                    var wordLength = ReadInt32(response, ref offset);
+                    if (ordinal != wordIndex + 1 || wordLength <= 0 || wordLength > response.Length - offset)
+                        throw new InvalidDataException();
+                    var wordText = decoder.GetString(response, offset, wordLength);
+                    offset += wordLength;
+                    actualLayoutCharacters = checked(actualLayoutCharacters + wordText.Length);
+                    actualLayoutUtf8Bytes = checked(actualLayoutUtf8Bytes + wordLength);
+                    if (actualLayoutCharacters > PdfWorkerProtocol.MaxLayoutCharacters
+                        || actualLayoutUtf8Bytes > PdfWorkerProtocol.MaxLayoutUtf8Bytes)
+                        throw new InvalidDataException();
+
+                    var left = ReadCoordinate(response, ref offset);
+                    var bottom = ReadCoordinate(response, ref offset);
+                    var right = ReadCoordinate(response, ref offset);
+                    var top = ReadCoordinate(response, ref offset);
+                    var baseline = ReadCoordinate(response, ref offset);
+                    var orientationValue = ReadByte(response, ref offset);
+                    if (left > right || bottom > top
+                        || !Enum.IsDefined(typeof(PdfWordOrientation), orientationValue))
+                        throw new InvalidDataException();
+
+                    words.Add(new PdfExtractedWord(
+                        ordinal,
+                        wordText,
+                        left,
+                        bottom,
+                        right,
+                        top,
+                        baseline,
+                        (PdfWordOrientation)orientationValue));
+                }
+
+                pages.Add(new PdfExtractedPage(pageNumber, text, words));
             }
 
             if (offset != response.Length || actualCharacters != characterCount || actualUtf8Bytes > PdfWorkerProtocol.MaxUtf8Bytes)
@@ -354,6 +398,21 @@ public sealed class ContainedPdfTextExtractor : IPdfTextExtractor
         var value = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(offset, 4));
         offset += 4;
         return value;
+    }
+
+    private static double ReadCoordinate(byte[] bytes, ref int offset)
+    {
+        var value = ReadInt32(bytes, ref offset);
+        if (value < PdfWorkerProtocol.MinNormalizedCoordinate
+            || value > PdfWorkerProtocol.MaxNormalizedCoordinate)
+            throw new InvalidDataException();
+        return (double)value / PdfWorkerProtocol.CoordinateScale;
+    }
+
+    private static byte ReadByte(byte[] bytes, ref int offset)
+    {
+        if (offset >= bytes.Length) throw new InvalidDataException();
+        return bytes[offset++];
     }
 
     internal static async Task<bool> TerminateAndReapAsync(Process process)

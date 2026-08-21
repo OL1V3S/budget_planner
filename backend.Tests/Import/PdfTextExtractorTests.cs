@@ -1,5 +1,6 @@
 using BudgetPlanner.Import;
 using BudgetPlanner.Tests.Import.Fixtures.Sunflower;
+using System.Text;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -292,6 +293,166 @@ public sealed class PdfTextExtractorTests
             Environment.SetEnvironmentVariable("COMPlus_GCHeapHardLimitLOH", priorComPlus);
             Environment.SetEnvironmentVariable("BUDGETPLANNER_TEST_SECRET", priorSecret);
         }
+    }
+
+    [Fact]
+    public void Protocol_v2_round_trip_preserves_bounded_word_layout()
+    {
+        var response = BuildProtocolResponse();
+
+        var outcome = ContainedPdfTextExtractor.ParseResponse(response, 123);
+
+        Assert.True(outcome.IsSuccess);
+        var word = Assert.Single(Assert.Single(outcome.Result!.Pages).Words);
+        Assert.Equal("SAFE", word.Text);
+        Assert.Equal(.1, word.Left, 6);
+        Assert.Equal(.9, word.Right, 6);
+        Assert.Equal(PdfWordOrientation.Horizontal, word.Orientation);
+        Assert.Equal(15 * 1024 * 1024, PdfWorkerProtocol.MaxResponseBytes);
+    }
+
+    [Fact]
+    public void Protocol_v2_accepts_exact_layout_word_limit()
+    {
+        var response = BuildProtocolResponse(wordCount: PdfWorkerProtocol.MaxLayoutWords);
+
+        var outcome = ContainedPdfTextExtractor.ParseResponse(response, 123);
+
+        Assert.True(outcome.IsSuccess);
+        Assert.Equal(PdfWorkerProtocol.MaxLayoutWords, outcome.Result!.Pages.Single().Words.Count);
+    }
+
+    [Fact]
+    public void Protocol_v2_accepts_exact_layout_character_and_utf8_limits()
+    {
+        var exactWord = Encoding.UTF8.GetBytes(new string('\u754c', 20));
+        var response = BuildProtocolResponse(
+            wordCount: PdfWorkerProtocol.MaxLayoutWords,
+            wordBytes: exactWord);
+
+        var outcome = ContainedPdfTextExtractor.ParseResponse(response, 123);
+
+        Assert.True(outcome.IsSuccess);
+        Assert.Equal(PdfWorkerProtocol.MaxLayoutCharacters,
+            outcome.Result!.Pages.Single().Words.Sum(word => word.Text.Length));
+        Assert.Equal(PdfWorkerProtocol.MaxLayoutUtf8Bytes,
+            outcome.Result.Pages.Single().Words.Sum(word => Encoding.UTF8.GetByteCount(word.Text)));
+    }
+
+    [Fact]
+    public async Task Protocol_v2_response_buffer_ceiling_is_calculated_and_enforced()
+    {
+        const int calculatedMaximum = 18
+            + (PdfWorkerProtocol.MaxPages * 12)
+            + PdfWorkerProtocol.MaxUtf8Bytes
+            + PdfWorkerProtocol.MaxLayoutUtf8Bytes
+            + (PdfWorkerProtocol.MaxLayoutWords * 29);
+        Assert.True(calculatedMaximum < PdfWorkerProtocol.MaxResponseBytes);
+
+        var exact = await ContainedPdfTextExtractor.ReadBoundedAsync(
+            new MemoryStream(new byte[32]),
+            32,
+            CancellationToken.None);
+        Assert.Equal(32, exact.Length);
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            ContainedPdfTextExtractor.ReadBoundedAsync(
+                new MemoryStream(new byte[33]),
+                32,
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public void Protocol_v2_rejects_excess_layout_character_and_utf8_limits()
+    {
+        var excessWord = Encoding.UTF8.GetBytes(new string('\u754c', 21));
+        var response = BuildProtocolResponse(
+            wordCount: PdfWorkerProtocol.MaxLayoutWords,
+            wordBytes: excessWord);
+
+        var outcome = ContainedPdfTextExtractor.ParseResponse(response, 123);
+
+        Assert.Equal("processing_failed", outcome.Failure?.Code);
+    }
+
+    [Theory]
+    [InlineData("version")]
+    [InlineData("truncated")]
+    [InlineData("excess")]
+    [InlineData("ordinal")]
+    [InlineData("inverted")]
+    [InlineData("coordinate")]
+    [InlineData("orientation")]
+    [InlineData("utf8")]
+    [InlineData("word_count")]
+    [InlineData("negative_word_count")]
+    [InlineData("length_overflow")]
+    public void Protocol_v2_rejects_malformed_or_excess_layout_frames(string kind)
+    {
+        var response = kind switch
+        {
+            "ordinal" => BuildProtocolResponse(ordinal: 2),
+            "inverted" => BuildProtocolResponse(left: 900_000, right: 100_000),
+            "coordinate" => BuildProtocolResponse(left: PdfWorkerProtocol.MaxNormalizedCoordinate + 1),
+            "orientation" => BuildProtocolResponse(orientation: byte.MaxValue),
+            "utf8" => BuildProtocolResponse(wordBytes: new byte[] { 0xff }),
+            "word_count" => BuildProtocolResponse(wordCount: PdfWorkerProtocol.MaxLayoutWords + 1, writeWords: false),
+            "negative_word_count" => BuildProtocolResponse(wordCount: -1, writeWords: false),
+            "length_overflow" => BuildProtocolResponse(wordLengthOverride: int.MaxValue),
+            _ => BuildProtocolResponse()
+        };
+        response = kind switch
+        {
+            "version" => response.Select((value, index) => index == 4 ? (byte)1 : value).ToArray(),
+            "truncated" => response[..^1],
+            "excess" => response.Append((byte)0).ToArray(),
+            _ => response
+        };
+
+        var outcome = ContainedPdfTextExtractor.ParseResponse(response, 123);
+
+        Assert.Equal("processing_failed", outcome.Failure?.Code);
+    }
+
+    private static byte[] BuildProtocolResponse(
+        int wordCount = 1,
+        bool writeWords = true,
+        int ordinal = 1,
+        int left = 100_000,
+        int right = 900_000,
+        byte orientation = 0,
+        byte[]? wordBytes = null,
+        int? wordLengthOverride = null)
+    {
+        using var stream = new MemoryStream();
+        using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
+        writer.Write("BPDR"u8);
+        writer.Write(PdfWorkerProtocol.Version);
+        writer.Write((byte)0);
+        writer.Write(123);
+        writer.Write(1);
+        writer.Write(4);
+        writer.Write(1);
+        writer.Write(4);
+        writer.Write("TEXT"u8);
+        writer.Write(wordCount);
+        if (writeWords)
+        {
+            var encodedWord = wordBytes ?? "SAFE"u8.ToArray();
+            for (var index = 0; index < wordCount; index++)
+            {
+                writer.Write(ordinal + index);
+                writer.Write(wordLengthOverride ?? encodedWord.Length);
+                writer.Write(encodedWord);
+                writer.Write(left);
+                writer.Write(200_000);
+                writer.Write(right);
+                writer.Write(300_000);
+                writer.Write(220_000);
+                writer.Write(orientation);
+            }
+        }
+        writer.Flush();
+        return stream.ToArray();
     }
 
 }

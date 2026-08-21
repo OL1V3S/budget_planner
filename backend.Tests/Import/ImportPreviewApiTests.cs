@@ -263,6 +263,49 @@ public sealed class ImportPreviewApiTests
         Assert.Equal(0, await app.CountExpensesAsync());
     }
 
+    [Fact]
+    public async Task Positioned_compact_rows_flow_through_contained_extractor_and_preview_api()
+    {
+        await using var app = new FinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("preview-positioned-rows@example.com");
+        var page = new[]
+        {
+            new SyntheticPdfBuilder.PositionedText(50, 760, "-SunflowerBank SYNTHETIC HEADER STATEMENTDATE:02/28/26"),
+            new SyntheticPdfBuilder.PositionedText(50, 744, "DaysinStatementPeriod:28"),
+            new SyntheticPdfBuilder.PositionedText(50, 710, "Electronic Transactions"),
+            new SyntheticPdfBuilder.PositionedText(40, 694, "-"),
+            new SyntheticPdfBuilder.PositionedText(50, 694, "Posted"),
+            new SyntheticPdfBuilder.PositionedText(160, 694, "Description"),
+            new SyntheticPdfBuilder.PositionedText(520, 694, "Amount"),
+            new SyntheticPdfBuilder.PositionedText(50, 678, "02/05/26"),
+            new SyntheticPdfBuilder.PositionedText(160, 678, "SYNTHETICREFERENCE7"),
+            new SyntheticPdfBuilder.PositionedText(520, 678, "42.16-"),
+            new SyntheticPdfBuilder.PositionedText(50, 662, "02/06/26"),
+            new SyntheticPdfBuilder.PositionedText(160, 662, "SYNTHETICUTILITY"),
+            new SyntheticPdfBuilder.PositionedText(520, 662, "75.25-"),
+            new SyntheticPdfBuilder.PositionedText(50, 40, "Page1of1")
+        };
+        var pdf = SyntheticPdfBuilder.BuildPositioned(
+            new IReadOnlyList<SyntheticPdfBuilder.PositionedText>[] { page });
+        var extraction = await new ContainedPdfTextExtractor().ExtractAsync(pdf);
+        Assert.True(extraction.IsSuccess, extraction.Failure?.Code);
+        var parsed = new SunflowerStatementParser().Parse(extraction.Result!);
+        Assert.True(parsed.IsSuccess, parsed.Failure?.Code);
+        using var content = PdfUpload(pdf);
+
+        var response = await owner.Client.PostAsync("/api/import-previews/sunflower", content);
+        var preview = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var rows = preview.GetProperty("rows").EnumerateArray().ToList();
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(new[] { "SYNTHETICREFERENCE7", "SYNTHETICUTILITY" },
+            rows.Select(row => row.GetProperty("sourceDescription").GetString()));
+        Assert.All(rows, row => Assert.Equal("expense_candidate", row.GetProperty("classification").GetString()));
+        Assert.Equal(1, await app.CountImportPreviewBatchesAsync(owner.Id));
+        Assert.Equal(0, await app.CountExpensesAsync());
+    }
+
     [Theory]
     [InlineData("malformed", "invalid_pdf")]
     [InlineData("encrypted", "encrypted_pdf")]

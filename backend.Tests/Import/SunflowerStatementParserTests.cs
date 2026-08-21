@@ -185,6 +185,81 @@ public sealed class SunflowerStatementParserTests
     }
 
     [Fact]
+    public void Positional_words_separate_digit_ending_description_from_compact_amount()
+    {
+        var result = new SunflowerStatementParser().Parse(PositionalResult(
+            "02/01/26SYNTHETICREFERENCE710.00-02/02/26SECONDPURCHASE20.25-",
+            PositionalWord(1, "Posted", .08, .16, .80),
+            PositionalWord(2, "Description", .25, .40, .80),
+            PositionalWord(3, "Amount", .85, .93, .80),
+            PositionalWord(4, "02/01/26", .08, .16, .70),
+            PositionalWord(5, "SYNTHETIC", .25, .36, .70),
+            PositionalWord(6, "REFERENCE7", .37, .49, .70),
+            PositionalWord(7, "10.00-", .86, .93, .70),
+            PositionalWord(8, "02/02/26", .08, .16, .65),
+            PositionalWord(9, "SECOND", .25, .34, .65),
+            PositionalWord(10, "PURCHASE", .35, .46, .65),
+            PositionalWord(11, "20.25", .86, .92, .65),
+            PositionalWord(12, "-", .92, .93, .65)));
+
+        Assert.True(result.IsSuccess);
+        Assert.Collection(
+            result.Rows,
+            row =>
+            {
+                Assert.Equal("SYNTHETIC REFERENCE7", row.SourceDescription);
+                Assert.Equal(10.00m, row.Amount);
+                Assert.Equal(ImportedTransactionDirection.Debit, row.Direction);
+                Assert.Equal(ImportedRowClassification.ExpenseCandidate, row.Classification);
+            },
+            row =>
+            {
+                Assert.Equal("SECOND PURCHASE", row.SourceDescription);
+                Assert.Equal(20.25m, row.Amount);
+            });
+    }
+
+    [Theory]
+    [InlineData("duplicate_amount")]
+    [InlineData("column_drift")]
+    [InlineData("overlap")]
+    [InlineData("rotated")]
+    [InlineData("missing_layout")]
+    public void Ambiguous_or_invalid_positional_rows_fail_closed(string kind)
+    {
+        var words = new List<PdfExtractedWord>
+        {
+            PositionalWord(1, "Posted", .08, .16, .80),
+            PositionalWord(2, "Description", .25, .40, .80),
+            PositionalWord(3, "Amount", .85, .93, .80),
+            PositionalWord(4, "02/01/26", .08, .16, .70),
+            PositionalWord(5, "SYNTHETIC7", .25, kind == "overlap" ? .88 : .45, .70),
+            PositionalWord(6, "10.00-", kind == "column_drift" ? .70 : .86, kind == "column_drift" ? .77 : .93, .70,
+                kind == "rotated" ? PdfWordOrientation.Rotate90 : PdfWordOrientation.Horizontal),
+            PositionalWord(7, "02/02/26", .08, .16, .65),
+            PositionalWord(8, "SECOND", .25, .35, .65),
+            PositionalWord(9, "20.00-", .86, .93, .65)
+        };
+        if (kind == "duplicate_amount")
+        {
+            words.Add(PositionalWord(10, "11.00-", .78, .84, .70));
+        }
+        if (kind == "missing_layout")
+        {
+            words.Clear();
+        }
+
+        var result = new SunflowerStatementParser().Parse(PositionalResult(
+            "02/01/26SYNTHETIC710.00-02/02/26SECOND20.00-",
+            words.ToArray()));
+
+        Assert.True(result.IsSuccess);
+        var invalid = Assert.Single(result.Rows);
+        Assert.Equal(ImportedRowClassification.Invalid, invalid.Classification);
+        Assert.Contains("unsupported_transaction_row", invalid.Errors);
+    }
+
+    [Fact]
     public void Summary_headers_page_markers_balances_disclosures_and_no_checks_create_no_rows()
     {
         var result = new SunflowerStatementParser().Parse(Result(
@@ -316,6 +391,28 @@ public sealed class SunflowerStatementParserTests
             '\n',
             new[] { "SUNFLOWER BANK", statementDate, "Days in Statement Period: 28", "Electronic Transactions", "Posted Description Amount" }
                 .Concat(rows))));
+
+    private static PdfTextExtractionResult PositionalResult(
+        string compactRows,
+        params PdfExtractedWord[] words)
+    {
+        var text = "SUNFLOWER BANK\nSTATEMENT DATE: 02/28/26\nDays in Statement Period: 28\n" +
+                   "Electronic Transactions\nPosted Description Amount\n" + compactRows;
+        return new PdfTextExtractionResult(
+            0,
+            1,
+            text.Length,
+            new[] { new PdfExtractedPage(1, text, words) });
+    }
+
+    private static PdfExtractedWord PositionalWord(
+        int ordinal,
+        string text,
+        double left,
+        double right,
+        double baseline,
+        PdfWordOrientation orientation = PdfWordOrientation.Horizontal) =>
+        new(ordinal, text, left, baseline - .01, right, baseline + .01, baseline, orientation);
 
     private static SunflowerStatementParseResult ParseGeneratedRows(int count)
     {

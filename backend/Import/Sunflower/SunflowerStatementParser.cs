@@ -62,6 +62,8 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
             string? pendingSection = null;
             PendingRow? pendingRow = null;
             var inUnsupportedCheckSection = false;
+            var positionalRows = TryGetPositionalElectronicRows(page, statementDate);
+            var positionalRowsConsumed = false;
 
             void FlushPending()
             {
@@ -157,6 +159,29 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
 
                 if (LooksLikeTransactionStart(trimmed))
                 {
+                    if (!positionalRowsConsumed
+                        && section == ElectronicTransactionsSection
+                        && !sourceLine.Text.Any(char.IsWhiteSpace)
+                        && !TransactionRowRegex().IsMatch(trimmed)
+                        && positionalRows.Count > 0)
+                    {
+                        if (rows.Count + positionalRows.Count > MaximumCandidateRows)
+                        {
+                            return SunflowerStatementParseResult.Failed(
+                                SunflowerStatementParseFailure.CandidateRowLimitExceeded);
+                        }
+
+                        foreach (var positionalRow in positionalRows)
+                        {
+                            rows.Add(ParseRow(
+                                new PendingRow(page.PageNumber, section, positionalRow),
+                                statementDate,
+                                rows.Count + 1));
+                        }
+                        positionalRowsConsumed = true;
+                        continue;
+                    }
+
                     if (rows.Count >= MaximumCandidateRows)
                     {
                         return SunflowerStatementParseResult.Failed(
@@ -186,6 +211,243 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
             FlushPending();
         }
         return SunflowerStatementParseResult.Success(rows);
+    }
+
+    private static IReadOnlyList<string> TryGetPositionalElectronicRows(
+        PdfExtractedPage page,
+        DateOnly statementDate)
+    {
+        if (page.Words.Count == 0
+            || page.Words.Any(word => word.Orientation != PdfWordOrientation.Horizontal
+                || word.Ordinal <= 0
+                || string.IsNullOrEmpty(word.Text)
+                || !HasValidBox(word)))
+        {
+            return Array.Empty<string>();
+        }
+
+        var orderedWords = page.Words.OrderBy(word => word.Ordinal).ToList();
+        if (!orderedWords.Select(word => word.Ordinal).SequenceEqual(Enumerable.Range(1, orderedWords.Count)))
+        {
+            return Array.Empty<string>();
+        }
+
+        var medianHeight = Median(orderedWords.Select(word => word.Top - word.Bottom));
+        var characterWidths = orderedWords
+            .Where(word => word.Text.Length > 0)
+            .Select(word => (word.Right - word.Left) / word.Text.Length)
+            .Where(width => width > 0)
+            .ToList();
+        var medianCharacterWidth = Median(characterWidths);
+        if (medianHeight <= 0 || medianCharacterWidth <= 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var baselineTolerance = medianHeight * 0.45;
+        var lines = new List<PositionalLine>();
+        foreach (var word in orderedWords.OrderByDescending(word => word.Baseline).ThenBy(word => word.Left))
+        {
+            var line = lines
+                .Where(candidate => Math.Abs(candidate.Baseline - word.Baseline) <= baselineTolerance)
+                .OrderBy(candidate => Math.Abs(candidate.Baseline - word.Baseline))
+                .FirstOrDefault();
+            if (line is null)
+            {
+                lines.Add(new PositionalLine(word.Baseline, new List<PdfExtractedWord> { word }));
+            }
+            else
+            {
+                line.Words.Add(word);
+            }
+        }
+
+        lines = lines.OrderByDescending(line => line.Baseline).ToList();
+        foreach (var line in lines)
+        {
+            line.Words.Sort((left, right) => left.Left.CompareTo(right.Left));
+        }
+
+        var electronicHeadingIndex = lines.FindIndex(line =>
+            JoinedToken(line).Equals("ElectronicTransactions", StringComparison.OrdinalIgnoreCase));
+        var headerIndex = lines.FindIndex(
+            Math.Max(0, electronicHeadingIndex + 1),
+            line => JoinedToken(line).TrimStart('-')
+                .Equals("PostedDescriptionAmount", StringComparison.OrdinalIgnoreCase));
+        if (headerIndex < 0 || (electronicHeadingIndex >= 0 && headerIndex <= electronicHeadingIndex))
+        {
+            return Array.Empty<string>();
+        }
+
+        var headerLine = lines[headerIndex];
+        var postedHeaders = headerLine.Words
+            .Where(word => word.Text.Equals("Posted", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var descriptionHeaders = headerLine.Words
+            .Where(word => word.Text.Equals("Description", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var amountHeaders = headerLine.Words
+            .Where(word => word.Text.Equals("Amount", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (postedHeaders.Count != 1 || descriptionHeaders.Count != 1 || amountHeaders.Count != 1
+            || postedHeaders[0].Right > descriptionHeaders[0].Left
+            || descriptionHeaders[0].Right > amountHeaders[0].Left)
+        {
+            return Array.Empty<string>();
+        }
+
+        var candidates = new List<PositionalCandidate>();
+        var sawCandidate = false;
+        for (var lineIndex = headerIndex + 1; lineIndex < lines.Count; lineIndex++)
+        {
+            var line = lines[lineIndex];
+            var joined = JoinedToken(line);
+            if (IsLayoutTerminal(joined))
+            {
+                break;
+            }
+
+            var dateWords = line.Words.Where(word => TransactionDateRegex().IsMatch(word.Text)).ToList();
+            var amountCandidates = new List<PositionalAmount>();
+            for (var wordIndex = 0; wordIndex < line.Words.Count; wordIndex++)
+            {
+                var word = line.Words[wordIndex];
+                if (word.Text.EndsWith("-", StringComparison.Ordinal)
+                    && TryParseAmount(word.Text[..^1], out _))
+                {
+                    amountCandidates.Add(new PositionalAmount(word, null, word.Text));
+                    continue;
+                }
+
+                if (TryParseAmount(word.Text, out _)
+                    && wordIndex + 1 < line.Words.Count
+                    && line.Words[wordIndex + 1].Text == "-"
+                    && line.Words[wordIndex + 1].Left >= word.Right
+                    && line.Words[wordIndex + 1].Left - word.Right <= medianCharacterWidth * 2)
+                {
+                    amountCandidates.Add(new PositionalAmount(
+                        word,
+                        line.Words[wordIndex + 1],
+                        $"{word.Text}-"));
+                }
+            }
+
+            if (dateWords.Count == 0 && amountCandidates.Count == 0)
+            {
+                if (sawCandidate && !IsKnownLayoutContent(joined))
+                {
+                    return Array.Empty<string>();
+                }
+                continue;
+            }
+
+            sawCandidate = true;
+            if (dateWords.Count != 1 || amountCandidates.Count != 1)
+            {
+                return Array.Empty<string>();
+            }
+
+            var dateWord = dateWords[0];
+            var amount = amountCandidates[0];
+            var amountWord = amount.Word;
+            if (!TryResolveDate(dateWord.Text, statementDate, out _)
+                || dateWord.Right >= amountWord.Left)
+            {
+                return Array.Empty<string>();
+            }
+
+            var descriptionWords = line.Words
+                .Where(word => word.Left >= dateWord.Right && word.Right <= amountWord.Left)
+                .ToList();
+            if (descriptionWords.Count == 0
+                || line.Words.Any(word => word != dateWord
+                    && word != amountWord
+                    && word != amount.Marker
+                    && !descriptionWords.Contains(word)))
+            {
+                return Array.Empty<string>();
+            }
+
+            var lastDescription = descriptionWords[^1];
+            if (lastDescription.Right >= amountWord.Left
+                || line.Words.Max(word => word.Baseline) - line.Words.Min(word => word.Baseline) > baselineTolerance)
+            {
+                return Array.Empty<string>();
+            }
+
+            candidates.Add(new PositionalCandidate(
+                dateWord,
+                descriptionWords,
+                amount,
+                amountWord.Left - lastDescription.Right));
+        }
+
+        if (candidates.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
+
+        var dateColumn = Median(candidates.Select(candidate => candidate.Date.Left));
+        var amountColumn = Median(candidates.Select(candidate => candidate.Amount.Right));
+        var columnTolerance = medianCharacterWidth * 2;
+        var headerTolerance = medianCharacterWidth * 4;
+        if (candidates.Any(candidate =>
+                Math.Abs(candidate.Date.Left - dateColumn) > columnTolerance
+                || Math.Abs(candidate.Amount.Right - amountColumn) > columnTolerance
+                || candidate.DescriptionAmountGap < medianCharacterWidth)
+            || Math.Abs(postedHeaders[0].Left - dateColumn) > headerTolerance
+            || Math.Abs(amountHeaders[0].Right - amountColumn) > headerTolerance)
+        {
+            return Array.Empty<string>();
+        }
+
+        return candidates.Select(candidate =>
+            $"{candidate.Date.Text} {string.Join(' ', candidate.Description.Select(word => word.Text))} {candidate.Amount.CanonicalText}")
+            .ToList();
+    }
+
+    private static bool HasValidBox(PdfExtractedWord word) =>
+        double.IsFinite(word.Left)
+        && double.IsFinite(word.Bottom)
+        && double.IsFinite(word.Right)
+        && double.IsFinite(word.Top)
+        && double.IsFinite(word.Baseline)
+        && word.Left >= -0.05
+        && word.Right <= 1.05
+        && word.Bottom >= -0.05
+        && word.Top <= 1.05
+        && word.Baseline >= -0.05
+        && word.Baseline <= 1.05
+        && word.Left <= word.Right
+        && word.Bottom <= word.Top;
+
+    private static string JoinedToken(PositionalLine line) =>
+        string.Concat(line.Words.Select(word => word.Text));
+
+    private static bool IsLayoutTerminal(string joined) =>
+        joined.StartsWith("Page", StringComparison.OrdinalIgnoreCase)
+        || joined.Equals("DailyBalanceSummary", StringComparison.OrdinalIgnoreCase)
+        || joined.Equals("ImportantAccountInformation", StringComparison.OrdinalIgnoreCase)
+        || joined.Equals("AccountSummary", StringComparison.OrdinalIgnoreCase)
+        || joined.Equals("TransactionSummary", StringComparison.OrdinalIgnoreCase)
+        || joined.StartsWith("ChecksPaid", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsKnownLayoutContent(string joined) =>
+        joined.StartsWith("Total", StringComparison.OrdinalIgnoreCase)
+        || StatementDateRegex().IsMatch(joined)
+        || DaysInStatementPeriodRegex().IsMatch(joined);
+
+    private static double Median(IEnumerable<double> values)
+    {
+        var ordered = values.Where(double.IsFinite).OrderBy(value => value).ToList();
+        if (ordered.Count == 0)
+        {
+            return 0;
+        }
+        var middle = ordered.Count / 2;
+        return ordered.Count % 2 == 0
+            ? (ordered[middle - 1] + ordered[middle]) / 2
+            : ordered[middle];
     }
 
     private static NormalizedImportedRow ParseRow(PendingRow pending, DateOnly statementDate, int ordinal)
@@ -457,6 +719,22 @@ public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
         public string Section { get; } = section;
         public string SourceLine { get; } = sourceLine;
         public List<string> DescriptionContinuation { get; } = new();
+    }
+
+    private sealed record PositionalLine(double Baseline, List<PdfExtractedWord> Words);
+
+    private sealed record PositionalCandidate(
+        PdfExtractedWord Date,
+        IReadOnlyList<PdfExtractedWord> Description,
+        PositionalAmount Amount,
+        double DescriptionAmountGap);
+
+    private sealed record PositionalAmount(
+        PdfExtractedWord Word,
+        PdfExtractedWord? Marker,
+        string CanonicalText)
+    {
+        public double Right => Marker?.Right ?? Word.Right;
     }
 
     [GeneratedRegex(@"(?<![A-Za-z])STATEMENT\s*DATE\s*:\s*(?<date>\d{2}/\d{2}/\d{2})(?![\d/])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

@@ -127,10 +127,17 @@ During bounded processing, compute a SHA-256 digest of the uploaded PDF bytes. A
 
 The digest is used only as an exact-document identity aid; it does not replace structural PDF validation and must not be logged.
 
-For the same authenticated user and source type:
+For the same authenticated user, source type, and parser/rule version:
 
 - if an unexpired open preview exists for the same digest, reuse/return that batch rather than creating a second independent preview; and
 - if that statement was already confirmed, report it as already imported and do not create duplicate expenses by default.
+
+An open preview produced by an incompatible parser/rule version must not be
+resumed, mutated, or reused as current financial interpretation. A successful
+re-upload may atomically supersede that exact owned/source/digest predecessor
+with a current-version preview. The predecessor must remain unchanged if fresh
+extraction or parsing fails, and no cross-user preview may participate in the
+replacement decision.
 
 ## Row-level duplicate policy
 

@@ -1,7 +1,10 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
 using BudgetPlanner.Data;
+using BudgetPlanner.Import;
+using BudgetPlanner.Import.Sunflower;
 using BudgetPlanner.Models;
 using BudgetPlanner.Services;
 using Microsoft.AspNetCore.Hosting;
@@ -172,6 +175,60 @@ internal abstract class FinancialApiTestApplicationBase : WebApplicationFactory<
         using var scope = Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<BudgetContext>();
         return await context.ImportPreviewBatches.CountAsync(value => value.OwnerId == userId);
+    }
+
+    public async Task<ImportPreviewBatch> SeedImportPreviewBatchAsync(
+        string userId,
+        byte[] pdf,
+        string parserRuleVersion,
+        DateTime? createdAt = null)
+    {
+        using var scope = Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<BudgetContext>();
+        var created = createdAt ?? DateTime.UtcNow;
+        var batch = new ImportPreviewBatch
+        {
+            Id = Guid.NewGuid(),
+            OwnerId = userId,
+            SourceType = SunflowerStatementParser.SourceType,
+            ParserRuleVersion = parserRuleVersion,
+            DocumentDigest = SHA256.HashData(pdf),
+            CreatedAt = created,
+            ExpiresAt = created.AddHours(24),
+            Lifecycle = ImportPreviewLifecycle.Open,
+            Rows =
+            [
+                new ImportPreviewRow
+                {
+                    Id = Guid.NewGuid(),
+                    SourceRowOrdinal = 1,
+                    Direction = ImportedTransactionDirection.Unresolved,
+                    SourceDescription = "STALE SYNTHETIC ROW",
+                    SourceSection = "electronic_transactions",
+                    SourcePageNumber = 1,
+                    Classification = ImportedRowClassification.Invalid,
+                    IsEligible = false,
+                    ValidationErrorCodes = "[\"unsupported_transaction_row\"]",
+                    WarningCodes = "[]",
+                    DuplicateExpenseIds = "[]",
+                    SelectedForImport = false
+                }
+            ]
+        };
+        context.ImportPreviewBatches.Add(batch);
+        await context.SaveChangesAsync();
+        return batch;
+    }
+
+    public async Task<IReadOnlyList<ImportPreviewBatch>> FindImportPreviewBatchesAsync(string userId)
+    {
+        using var scope = Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<BudgetContext>();
+        return await context.ImportPreviewBatches.AsNoTracking()
+            .Include(value => value.Rows)
+            .Where(value => value.OwnerId == userId)
+            .OrderBy(value => value.CreatedAt)
+            .ToListAsync();
     }
 
     public async Task<IReadOnlyList<BudgetLimit>> FindBudgetLimitsAsync(

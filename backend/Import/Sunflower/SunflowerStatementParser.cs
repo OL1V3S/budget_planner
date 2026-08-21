@@ -6,7 +6,7 @@ namespace BudgetPlanner.Import.Sunflower;
 public sealed partial class SunflowerStatementParser : ISunflowerStatementParser
 {
     public const string SourceType = "sunflower_pdf";
-    public const string RuleVersion = "sunflower-v1";
+    public const string RuleVersion = "sunflower-v2";
     public const int MaximumCandidateRows = 1_000;
 
     private const string DepositsSection = "deposits";

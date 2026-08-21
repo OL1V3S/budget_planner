@@ -5,6 +5,8 @@ using BudgetPlanner.Data;
 using BudgetPlanner.Import.Sunflower;
 using BudgetPlanner.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Npgsql;
 
 namespace BudgetPlanner.Import;
 
@@ -38,6 +40,8 @@ public sealed class ImportPreviewService(
 {
     public const int MaximumUploadBytes = 10 * 1024 * 1024;
     private static readonly TimeSpan PreviewLifetime = TimeSpan.FromHours(24);
+    private const string OpenDigestIndexName =
+        "IX_ImportPreviewBatches_OwnerId_SourceType_DocumentDigest";
 
     public async Task<ImportPreviewOperation> CreateSunflowerAsync(
         string userId, Stream file, long? declaredLength, CancellationToken cancellationToken)
@@ -78,8 +82,12 @@ public sealed class ImportPreviewService(
             processingCts.CancelAfter(processingOptions.Timeout);
             var processingToken = processingCts.Token;
 
-            var existing = await FindOpenByDigestAsync(
-                userId, SunflowerStatementParser.SourceType, digest, processingToken);
+            var existing = await FindCompatibleOpenByDigestAsync(
+                userId,
+                SunflowerStatementParser.SourceType,
+                SunflowerStatementParser.RuleVersion,
+                digest,
+                processingToken);
             if (existing is not null)
                 return new(ToResponse(existing), null, true);
 
@@ -187,28 +195,17 @@ public sealed class ImportPreviewService(
             });
         }
 
-        context.ImportPreviewBatches.Add(batch);
-        try
-        {
-            await context.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException)
-        {
-            context.Entry(batch).State = EntityState.Detached;
-            var winner = await FindOpenByDigestAsync(userId, SunflowerStatementParser.SourceType, digest, cancellationToken);
-            if (winner is null) throw;
-            return new(ToResponse(winner), null, true);
-        }
+        var persisted = await PersistOrReuseAsync(batch, cancellationToken);
 
         await CleanupExpiredAsync(now, cancellationToken);
-        return new(ToResponse(batch), null);
+        return persisted;
     }
 
     public async Task<ImportPreviewResponse?> GetOpenAsync(string userId, string sourceType, CancellationToken cancellationToken)
     {
         if (sourceType != SunflowerStatementParser.SourceType) return null;
         await ExpireOwnedAsync(userId, cancellationToken);
-        var batch = await OwnedOpenQuery(userId).Where(value => value.SourceType == sourceType)
+        var batch = await OwnedCompatibleOpenQuery(userId).Where(value => value.SourceType == sourceType)
             .OrderByDescending(value => value.CreatedAt).FirstOrDefaultAsync(cancellationToken);
         return batch is null ? null : ToResponse(batch);
     }
@@ -216,7 +213,8 @@ public sealed class ImportPreviewService(
     public async Task<ImportPreviewResponse?> GetAsync(string userId, Guid batchId, CancellationToken cancellationToken)
     {
         await ExpireOwnedAsync(userId, cancellationToken);
-        var batch = await OwnedOpenQuery(userId).SingleOrDefaultAsync(value => value.Id == batchId, cancellationToken);
+        var batch = await OwnedCompatibleOpenQuery(userId)
+            .SingleOrDefaultAsync(value => value.Id == batchId, cancellationToken);
         return batch is null ? null : ToResponse(batch);
     }
 
@@ -224,7 +222,11 @@ public sealed class ImportPreviewService(
     {
         await ExpireOwnedAsync(userId, cancellationToken);
         var batch = await context.ImportPreviewBatches.Include(value => value.Rows)
-            .Where(value => value.OwnerId == userId && value.Id == batchId && value.Lifecycle == ImportPreviewLifecycle.Open)
+            .Where(value => value.OwnerId == userId
+                && value.Id == batchId
+                && value.SourceType == SunflowerStatementParser.SourceType
+                && value.ParserRuleVersion == SunflowerStatementParser.RuleVersion
+                && value.Lifecycle == ImportPreviewLifecycle.Open)
             .SingleOrDefaultAsync(cancellationToken);
         var row = batch?.Rows.SingleOrDefault(value => value.Id == rowId);
         if (batch is null || row is null) return Failed("preview_not_found", "The preview is unavailable.");
@@ -253,12 +255,122 @@ public sealed class ImportPreviewService(
         .AsNoTracking().Include(value => value.Rows)
         .Where(value => value.OwnerId == userId && value.Lifecycle == ImportPreviewLifecycle.Open);
 
-    private async Task<ImportPreviewBatch?> FindOpenByDigestAsync(string userId, string sourceType, byte[] digest, CancellationToken cancellationToken)
+    private IQueryable<ImportPreviewBatch> OwnedCompatibleOpenQuery(string userId) =>
+        OwnedOpenQuery(userId).Where(value =>
+            value.SourceType == SunflowerStatementParser.SourceType
+            && value.ParserRuleVersion == SunflowerStatementParser.RuleVersion);
+
+    private async Task<ImportPreviewBatch?> FindCompatibleOpenByDigestAsync(
+        string userId,
+        string sourceType,
+        string parserRuleVersion,
+        byte[] digest,
+        CancellationToken cancellationToken)
     {
         await ExpireOwnedAsync(userId, cancellationToken);
-        var candidates = await OwnedOpenQuery(userId).Where(value => value.SourceType == sourceType).ToListAsync(cancellationToken);
+        var candidates = await OwnedOpenQuery(userId)
+            .Where(value => value.SourceType == sourceType
+                && value.ParserRuleVersion == parserRuleVersion)
+            .ToListAsync(cancellationToken);
         return candidates.SingleOrDefault(value => CryptographicOperations.FixedTimeEquals(value.DocumentDigest, digest));
     }
+
+    private async Task<ImportPreviewOperation> PersistOrReuseAsync(
+        ImportPreviewBatch batch,
+        CancellationToken cancellationToken)
+    {
+        IDbContextTransaction? transaction = null;
+        try
+        {
+            if (context.Database.IsRelational())
+            {
+                transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+            }
+
+            var winner = await FindCompatibleOpenByDigestAsync(
+                batch.OwnerId,
+                batch.SourceType,
+                batch.ParserRuleVersion,
+                batch.DocumentDigest,
+                cancellationToken);
+            if (winner is not null)
+            {
+                return new(ToResponse(winner), null, true);
+            }
+
+            var predecessor = await FindTrackedOpenByDigestAsync(
+                batch.OwnerId,
+                batch.SourceType,
+                batch.DocumentDigest,
+                cancellationToken);
+            if (predecessor is not null)
+            {
+                predecessor.Lifecycle = ImportPreviewLifecycle.Expired;
+                if (transaction is not null)
+                {
+                    await context.SaveChangesAsync(cancellationToken);
+                }
+            }
+
+            context.ImportPreviewBatches.Add(batch);
+            await context.SaveChangesAsync(cancellationToken);
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+            return new(ToResponse(batch), null);
+        }
+        catch (DbUpdateException exception) when (IsOpenDigestUniqueViolation(exception))
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                await transaction.DisposeAsync();
+                transaction = null;
+            }
+            context.ChangeTracker.Clear();
+            var winner = await FindCompatibleOpenByDigestAsync(
+                batch.OwnerId,
+                batch.SourceType,
+                batch.ParserRuleVersion,
+                batch.DocumentDigest,
+                cancellationToken);
+            if (winner is null)
+            {
+                throw;
+            }
+            return new(ToResponse(winner), null, true);
+        }
+        finally
+        {
+            if (transaction is not null)
+            {
+                await transaction.DisposeAsync();
+            }
+        }
+    }
+
+    private async Task<ImportPreviewBatch?> FindTrackedOpenByDigestAsync(
+        string userId,
+        string sourceType,
+        byte[] digest,
+        CancellationToken cancellationToken)
+    {
+        var candidates = await context.ImportPreviewBatches
+            .Where(value => value.OwnerId == userId
+                && value.SourceType == sourceType
+                && value.Lifecycle == ImportPreviewLifecycle.Open)
+            .ToListAsync(cancellationToken);
+        return candidates.SingleOrDefault(value =>
+            CryptographicOperations.FixedTimeEquals(value.DocumentDigest, digest));
+    }
+
+    private static bool IsOpenDigestUniqueViolation(DbUpdateException exception) =>
+        exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: OpenDigestIndexName
+        };
 
     private async Task ExpireOwnedAsync(string userId, CancellationToken cancellationToken)
     {

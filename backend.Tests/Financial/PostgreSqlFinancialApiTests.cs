@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using BudgetPlanner.Data;
+using BudgetPlanner.Import.Sunflower;
+using BudgetPlanner.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -181,6 +183,104 @@ public sealed class PostgreSqlFinancialApiTests
         Assert.Equal(32, batch.DocumentDigest.Length);
         Assert.Equal(13, batch.Rows.Count);
         Assert.False(await context.Expenses.AnyAsync());
+
+        var indexDefinition = await context.Database.SqlQueryRaw<string>(
+            """
+            SELECT indexdef AS "Value"
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND indexname = 'IX_ImportPreviewBatches_OwnerId_SourceType_DocumentDigest'
+            """).SingleAsync();
+        Assert.Contains("\"OwnerId\", \"SourceType\", \"DocumentDigest\"", indexDefinition);
+        Assert.Contains("WHERE", indexDefinition);
+        Assert.Contains("\"Lifecycle\"", indexDefinition);
+        Assert.Contains("'Open'", indexDefinition);
+        Assert.DoesNotContain("ParserRuleVersion", indexDefinition);
+    }
+
+    [PostgreSqlFact]
+    public async Task Concurrent_version_replacements_resolve_to_one_current_open_batch()
+    {
+        await using var app = new PostgreSqlConcurrentImportPreviewTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("postgres-preview-race@example.com");
+        var pdf = SunflowerFixtureCorpus.CreateRepresentativePdf();
+        var predecessor = await app.SeedImportPreviewBatchAsync(owner.Id, pdf, "sunflower-v1");
+
+        async Task<ImportPreviewOperation> CreateAsync()
+        {
+            using var scope = app.Services.CreateScope();
+            var service = scope.ServiceProvider.GetRequiredService<IImportPreviewService>();
+            await using var stream = new MemoryStream(pdf, writable: false);
+            return await service.CreateSunflowerAsync(owner.Id, stream, pdf.Length, CancellationToken.None);
+        }
+
+        var firstTask = CreateAsync();
+        var secondTask = CreateAsync();
+        var results = await Task.WhenAll(firstTask, secondTask);
+
+        Assert.All(results, result => Assert.True(result.IsSuccess));
+        Assert.Single(results, result => result.Reused);
+        Assert.Single(results, result => !result.Reused);
+        var firstPreview = results[0].Preview!;
+        var secondPreview = results[1].Preview!;
+        Assert.Equal(firstPreview.BatchId, secondPreview.BatchId);
+        Assert.Equal("sunflower-v2", firstPreview.ParserRuleVersion);
+
+        var batches = await app.FindImportPreviewBatchesAsync(owner.Id);
+        Assert.Equal(2, batches.Count);
+        var stale = Assert.Single(batches, value => value.Id == predecessor.Id);
+        Assert.Equal(ImportPreviewLifecycle.Expired, stale.Lifecycle);
+        Assert.Equal("sunflower-v1", stale.ParserRuleVersion);
+        var current = Assert.Single(batches, value => value.ParserRuleVersion == "sunflower-v2");
+        Assert.Equal(ImportPreviewLifecycle.Open, current.Lifecycle);
+        Assert.Equal(firstPreview.BatchId, current.Id);
+        Assert.Equal(2, app.Extractor.CallCount);
+        Assert.Equal(0, await app.CountExpensesAsync());
+    }
+
+    [PostgreSqlFact]
+    public async Task Failed_replacement_insert_rolls_back_predecessor_supersession()
+    {
+        await using var app = new PostgreSqlImportPreviewTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("postgres-preview-rollback@example.com");
+        var pdf = SunflowerFixtureCorpus.CreateRepresentativePdf();
+        var predecessor = await app.SeedImportPreviewBatchAsync(owner.Id, pdf, "sunflower-v1");
+
+        using (var setupScope = app.Services.CreateScope())
+        {
+            var setupContext = setupScope.ServiceProvider.GetRequiredService<BudgetContext>();
+            await setupContext.Database.ExecuteSqlRawAsync(
+                """
+                CREATE FUNCTION reject_current_parser_preview() RETURNS trigger
+                LANGUAGE plpgsql AS $function$
+                BEGIN
+                    IF NEW."ParserRuleVersion" = 'sunflower-v2' THEN
+                        RAISE EXCEPTION 'intentional disposable-test insert rejection';
+                    END IF;
+                    RETURN NEW;
+                END;
+                $function$;
+
+                CREATE TRIGGER reject_current_parser_preview_insert
+                BEFORE INSERT ON "ImportPreviewBatches"
+                FOR EACH ROW EXECUTE FUNCTION reject_current_parser_preview();
+                """);
+        }
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var service = scope.ServiceProvider.GetRequiredService<IImportPreviewService>();
+            await using var stream = new MemoryStream(pdf, writable: false);
+            await Assert.ThrowsAsync<DbUpdateException>(() =>
+                service.CreateSunflowerAsync(owner.Id, stream, pdf.Length, CancellationToken.None));
+        }
+
+        var batches = await app.FindImportPreviewBatchesAsync(owner.Id);
+        var preserved = Assert.Single(batches);
+        Assert.Equal(predecessor.Id, preserved.Id);
+        Assert.Equal(ImportPreviewLifecycle.Open, preserved.Lifecycle);
+        Assert.Equal("sunflower-v1", preserved.ParserRuleVersion);
+        Assert.Equal(0, await app.CountExpensesAsync());
     }
 
     [PostgreSqlFact]
@@ -237,6 +337,43 @@ internal sealed class PostgreSqlImportPreviewTestApplication : PostgreSqlFinanci
     {
         services.RemoveAll<IPdfTextExtractor>();
         services.AddSingleton<IPdfTextExtractor, BudgetPlanner.Tests.Import.ImmediateSyntheticExtractor>();
+    }
+}
+
+internal sealed class PostgreSqlConcurrentImportPreviewTestApplication : PostgreSqlFinancialApiTestApplication
+{
+    public CoordinatedSyntheticExtractor Extractor =>
+        Services.GetRequiredService<CoordinatedSyntheticExtractor>();
+
+    protected override void ConfigureAdditionalServices(IServiceCollection services)
+    {
+        services.RemoveAll<IPdfTextExtractor>();
+        services.AddSingleton<CoordinatedSyntheticExtractor>();
+        services.AddSingleton<IPdfTextExtractor>(provider =>
+            provider.GetRequiredService<CoordinatedSyntheticExtractor>());
+    }
+}
+
+internal sealed class CoordinatedSyntheticExtractor : IPdfTextExtractor
+{
+    private readonly TaskCompletionSource _bothCallersReady =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly BudgetPlanner.Tests.Import.ImmediateSyntheticExtractor _inner = new();
+    private int _callCount;
+
+    public int CallCount => Volatile.Read(ref _callCount);
+
+    public async Task<PdfTextExtractionOutcome> ExtractAsync(
+        ReadOnlyMemory<byte> pdf,
+        CancellationToken cancellationToken = default)
+    {
+        if (Interlocked.Increment(ref _callCount) == 2)
+        {
+            _bothCallersReady.TrySetResult();
+        }
+
+        await _bothCallersReady.Task.WaitAsync(cancellationToken);
+        return await _inner.ExtractAsync(pdf, cancellationToken);
     }
 }
 

@@ -5,6 +5,7 @@ using BudgetPlanner.Tests.Financial;
 using BudgetPlanner.Tests.Import.Fixtures.Sunflower;
 using BudgetPlanner.Import;
 using BudgetPlanner.Import.Sunflower;
+using BudgetPlanner.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -76,9 +77,111 @@ public sealed class ImportPreviewApiTests
 
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Equal("sunflower-v2", firstBody.GetProperty("parserRuleVersion").GetString());
+        Assert.Equal("sunflower-v2", secondBody.GetProperty("parserRuleVersion").GetString());
         Assert.Equal(firstBody.GetProperty("batchId").GetGuid(), secondBody.GetProperty("batchId").GetGuid());
         Assert.Equal(firstBody.GetProperty("batchId").GetGuid(), resumed.GetProperty("batchId").GetGuid());
         Assert.Equal(1, await app.CountImportPreviewBatchesAsync(owner.Id));
+        Assert.Equal(1, ((ImmediateSyntheticExtractor)app.Services
+            .GetRequiredService<IPdfTextExtractor>()).CallCount);
+    }
+
+    [Fact]
+    public async Task Incompatible_preview_is_hidden_then_atomically_superseded_after_successful_reparse()
+    {
+        await using var app = new SyntheticExtractionFinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("preview-version-owner@example.com");
+        using var other = await app.CreateAuthenticatedUserAsync("preview-version-other@example.com");
+        var pdf = SunflowerFixtureCorpus.CreateRepresentativePdf();
+        var stale = await app.SeedImportPreviewBatchAsync(owner.Id, pdf, "sunflower-v1");
+        var otherStale = await app.SeedImportPreviewBatchAsync(other.Id, pdf, "sunflower-v1");
+
+        var staleRead = await owner.Client.GetAsync($"/api/import-previews/{stale.Id}");
+        var staleResume = await owner.Client.GetAsync("/api/import-previews/open?sourceType=sunflower_pdf");
+        var staleUpdate = await owner.Client.PatchAsJsonAsync(
+            $"/api/import-previews/{stale.Id}/rows/{stale.Rows.Single().Id}",
+            new { editableExpenseDescription = "changed", category = "food", selectedForImport = false });
+        var crossUserRead = await other.Client.GetAsync($"/api/import-previews/{stale.Id}");
+        using var content = PdfUpload(pdf);
+
+        var response = await owner.Client.PostAsync("/api/import-previews/sunflower", content);
+        var replacement = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var resumed = await owner.Client.GetFromJsonAsync<JsonElement>(
+            "/api/import-previews/open?sourceType=sunflower_pdf");
+
+        Assert.Equal(HttpStatusCode.NotFound, staleRead.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, staleResume.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, staleUpdate.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, crossUserRead.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.NotEqual(stale.Id, replacement.GetProperty("batchId").GetGuid());
+        Assert.Equal("sunflower-v2", replacement.GetProperty("parserRuleVersion").GetString());
+        Assert.Equal(13, replacement.GetProperty("rows").GetArrayLength());
+        Assert.DoesNotContain(
+            replacement.GetProperty("rows").EnumerateArray(),
+            row => row.GetProperty("sourceDescription").GetString() == "STALE SYNTHETIC ROW");
+        Assert.Equal(replacement.GetProperty("batchId").GetGuid(), resumed.GetProperty("batchId").GetGuid());
+
+        var ownerBatches = await app.FindImportPreviewBatchesAsync(owner.Id);
+        Assert.Collection(
+            ownerBatches,
+            predecessor =>
+            {
+                Assert.Equal(stale.Id, predecessor.Id);
+                Assert.Equal(ImportPreviewLifecycle.Expired, predecessor.Lifecycle);
+                Assert.Equal("sunflower-v1", predecessor.ParserRuleVersion);
+            },
+            current =>
+            {
+                Assert.Equal(ImportPreviewLifecycle.Open, current.Lifecycle);
+                Assert.Equal("sunflower-v2", current.ParserRuleVersion);
+            });
+        var preservedOther = Assert.Single(await app.FindImportPreviewBatchesAsync(other.Id));
+        Assert.Equal(otherStale.Id, preservedOther.Id);
+        Assert.Equal(ImportPreviewLifecycle.Open, preservedOther.Lifecycle);
+        Assert.Equal(0, await app.CountExpensesAsync());
+    }
+
+    [Fact]
+    public async Task Failed_reparse_does_not_supersede_incompatible_preview_or_write_expenses()
+    {
+        await using var app = new RejectingParserFinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("preview-version-failure@example.com");
+        var pdf = SunflowerFixtureCorpus.CreateRepresentativePdf();
+        var stale = await app.SeedImportPreviewBatchAsync(owner.Id, pdf, "sunflower-v1");
+        using var content = PdfUpload(pdf);
+
+        var response = await owner.Client.PostAsync("/api/import-previews/sunflower", content);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal("unsupported_statement_format", error.GetProperty("code").GetString());
+        var preserved = Assert.Single(await app.FindImportPreviewBatchesAsync(owner.Id));
+        Assert.Equal(stale.Id, preserved.Id);
+        Assert.Equal(ImportPreviewLifecycle.Open, preserved.Lifecycle);
+        Assert.Equal("sunflower-v1", preserved.ParserRuleVersion);
+        Assert.Equal(0, await app.CountExpensesAsync());
+    }
+
+    [Fact]
+    public async Task Timed_out_reparse_does_not_supersede_incompatible_preview_or_write_expenses()
+    {
+        await using var app = new BlockingParserFinancialApiTestApplication(TimeSpan.FromMilliseconds(50));
+        using var owner = await app.CreateAuthenticatedUserAsync("preview-version-timeout@example.com");
+        var pdf = SunflowerFixtureCorpus.CreateRepresentativePdf();
+        var stale = await app.SeedImportPreviewBatchAsync(owner.Id, pdf, "sunflower-v1");
+        using var content = PdfUpload(pdf);
+
+        var response = await owner.Client.PostAsync("/api/import-previews/sunflower", content);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.RequestTimeout, response.StatusCode);
+        Assert.Equal("processing_timed_out", error.GetProperty("code").GetString());
+        var preserved = Assert.Single(await app.FindImportPreviewBatchesAsync(owner.Id));
+        Assert.Equal(stale.Id, preserved.Id);
+        Assert.Equal(ImportPreviewLifecycle.Open, preserved.Lifecycle);
+        Assert.Equal("sunflower-v1", preserved.ParserRuleVersion);
+        Assert.Equal(0, await app.CountExpensesAsync());
     }
 
     [Fact]
@@ -422,8 +525,13 @@ internal sealed class SyntheticExtractionFinancialApiTestApplication : Financial
 
 internal sealed class ImmediateSyntheticExtractor : IPdfTextExtractor
 {
+    private int _callCount;
+
+    public int CallCount => Volatile.Read(ref _callCount);
+
     public Task<PdfTextExtractionOutcome> ExtractAsync(ReadOnlyMemory<byte> pdf, CancellationToken cancellationToken = default)
     {
+        Interlocked.Increment(ref _callCount);
         cancellationToken.ThrowIfCancellationRequested();
         var pages = SunflowerFixtureCorpus.RepresentativePages
             .Select((page, index) => new PdfExtractedPage(index + 1, string.Join('\n', page.Lines)))
@@ -443,6 +551,28 @@ internal sealed class BlockingParserFinancialApiTestApplication(TimeSpan timeout
         services.AddSingleton<ISunflowerStatementParser, BlockingSunflowerParser>();
         services.RemoveAll<ImportPreviewProcessingOptions>();
         services.AddSingleton(new ImportPreviewProcessingOptions { Timeout = timeout });
+    }
+}
+
+internal sealed class RejectingParserFinancialApiTestApplication : FinancialApiTestApplication
+{
+    protected override void ConfigureAdditionalServices(IServiceCollection services)
+    {
+        services.RemoveAll<IPdfTextExtractor>();
+        services.AddSingleton<IPdfTextExtractor, ImmediateSyntheticExtractor>();
+        services.RemoveAll<ISunflowerStatementParser>();
+        services.AddSingleton<ISunflowerStatementParser, RejectingSunflowerParser>();
+    }
+}
+
+internal sealed class RejectingSunflowerParser : ISunflowerStatementParser
+{
+    public SunflowerStatementParseResult Parse(
+        PdfTextExtractionResult extraction,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return SunflowerStatementParseResult.Failed(SunflowerStatementParseFailure.UnsupportedFormat);
     }
 }
 

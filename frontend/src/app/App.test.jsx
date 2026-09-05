@@ -21,6 +21,10 @@ vi.mock('../features/commitments/pages/CommitmentsPage', () => ({
   default: () => <h1>Commitments workspace</h1>,
 }))
 
+vi.mock('../features/paychecks/pages/PaychecksPage', () => ({
+  default: () => <h1>Paychecks workspace</h1>,
+}))
+
 vi.mock('./pages/OverviewPage', () => ({
   default: () => <h1>Welcome back</h1>,
 }))
@@ -79,8 +83,8 @@ describe('application routes and shell', () => {
     expect(screen.getAllByText('ordo')).toHaveLength(2)
   })
 
-  it('redirects a protected route to authentication without a token', async () => {
-    renderAt('/transactions')
+  it.each(['/transactions', '/paychecks'])('redirects protected %s to authentication without a token', async (path) => {
+    renderAt(path)
     expect(await screen.findByRole('heading', { name: 'Authentication content' })).toBeInTheDocument()
     expect(screen.getByTestId('location')).toHaveTextContent('/')
   })
@@ -91,6 +95,7 @@ describe('application routes and shell', () => {
     ['/budgets', 'Budgets workspace'],
     ['/analytics', 'Analytics workspace'],
     ['/commitments', 'Commitments workspace'],
+    ['/paychecks', 'Paychecks workspace'],
     ['/investing', 'Investing'],
     ['/settings', 'Settings'],
   ])('supports direct authenticated navigation to %s', async (path, heading) => {
@@ -117,13 +122,24 @@ describe('application routes and shell', () => {
     expect(document.getElementById('main-content')).toHaveAttribute('id', 'main-content')
   })
 
-  it('exposes six primary destinations in mobile navigation and keeps Settings directly reachable', () => {
+  it('exposes seven primary destinations in mobile navigation and keeps Settings directly reachable', () => {
     localStorage.setItem('token', 'jwt-value')
     renderAt('/overview')
     const navigation = screen.getByRole('navigation', { name: 'Mobile navigation' })
     expect(navigation).toBeInTheDocument()
-    expect(navigation.querySelectorAll('a')).toHaveLength(6)
+    expect(navigation.querySelectorAll('a')).toHaveLength(7)
+    expect(within(navigation).getByRole('link', { name: 'Paychecks' })).toHaveAttribute('href', '/paychecks')
     expect(screen.getAllByRole('link', { name: /Settings/ })).toHaveLength(2)
+  })
+
+  it('opens Paychecks through normal navigation and marks both navigation entries current', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem('token', 'jwt-value')
+    renderAt('/overview')
+    await user.click(within(screen.getByRole('navigation', { name: 'Primary navigation' })).getByRole('link', { name: /Paychecks/ }))
+    expect(await screen.findByRole('heading', { name: 'Paychecks workspace' })).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: /Paychecks/ })).toHaveLength(2)
+    screen.getAllByRole('link', { name: /Paychecks/ }).forEach((link) => expect(link).toHaveAttribute('aria-current', 'page'))
   })
 
   it('clears the existing auth keys and returns to authentication on logout', async () => {

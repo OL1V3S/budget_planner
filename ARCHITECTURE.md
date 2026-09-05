@@ -26,10 +26,15 @@ frontend does not connect directly to the database.
 `frontend/src/app/` owns routing, the authenticated application shell, and
 top-level pages. Product behavior is organized under `frontend/src/features/`
 by capability, including authentication, expenses, budget limits, analytics,
-transactions, and commitment review. The protected Commitments experience
+transactions, commitment review, and paychecks. The protected Commitments experience
 consumes the owner-scoped candidate and commitment APIs and keeps evidence
 review, confirmation, dismissal/reconsideration, expectation edits, and
-lifecycle controls inside `frontend/src/features/commitments/`. Shared HTTP,
+lifecycle controls inside `frontend/src/features/commitments/`. The protected
+Paychecks experience in `frontend/src/features/paychecks/` consumes the existing
+candidate/profile APIs for explicit confirmation, dismissal/reconsideration,
+manual expectations, allowed edits, and lifecycle changes. It displays the
+server's active-profile projection as expected, never guaranteed, and keeps
+candidate schedules and saved profile schedules immutable. Shared HTTP,
 constants, theme, UI, and utilities live under
 `frontend/src/shared/`; chart-specific presentation lives under
 `frontend/src/charts/`.
@@ -80,8 +85,9 @@ occurrences, and exact-fingerprint dismissals are persisted; candidate and
 projection results remain derived. Confirmation uses a serializable transaction,
 ordered inflow locks, owner-consistent foreign keys, and exclusive evidence
 assignment. The profile schedule is immutable, while accepted amounts, windows,
-display name, and lifecycle are explicitly editable. No Paychecks frontend or
-paycheck change detection is included. See the paycheck section of
+display name, and lifecycle are explicitly editable. The Paychecks frontend
+consumes these contracts without changing their semantics. Paycheck change
+detection is not included. See the paycheck section of
 [`docs/financial-domain-invariants.md`](docs/financial-domain-invariants.md).
 
 ### Authentication and ownership boundaries

@@ -5,6 +5,7 @@ import TransactionsPage from "../features/transactions/pages/TransactionsPage";
 import BudgetsPage from "../features/budgetLimits/pages/BudgetsPage";
 import AnalyticsPage from "../features/analytics/pages/AnalyticsPage";
 import CommitmentsPage from "../features/commitments/pages/CommitmentsPage";
+import PaychecksPage from "../features/paychecks/pages/PaychecksPage";
 import AuthPage from "../features/auth/components/AuthPage";
 import ConfirmEmailPage from "../features/auth/components/ConfirmEmailPage";
 import ForgotPasswordPage from "../features/auth/components/ForgotPasswordPage";
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/budgets" element={<BudgetsPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/commitments" element={<CommitmentsPage />} />
+          <Route path="/paychecks" element={<PaychecksPage />} />
           <Route path="/investing" element={<InvestingPage />} />
           <Route path="/settings" element={<SettingsPage email={localStorage.getItem("email")} />} />
         </Route>

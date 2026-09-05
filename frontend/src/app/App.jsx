@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
+import { clearSession, getSessionSnapshot, subscribeToSession } from "../shared/auth/session";
 
 import TransactionsPage from "../features/transactions/pages/TransactionsPage";
 import BudgetsPage from "../features/budgetLimits/pages/BudgetsPage";
@@ -17,15 +18,8 @@ import InvestingPage from "./pages/InvestingPage";
 import SettingsPage from "./pages/SettingsPage";
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(
-    !!localStorage.getItem("token")
-  );
-
-  function handleLogout() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("email");
-    setIsLoggedIn(false);
-  }
+  const session = useSyncExternalStore(subscribeToSession, getSessionSnapshot);
+  const isLoggedIn = Boolean(session.token);
 
   return (
     <Routes>
@@ -35,7 +29,7 @@ export default function App() {
           isLoggedIn ? (
             <Navigate to="/overview" replace />
           ) : (
-            <AuthPage onLogin={() => setIsLoggedIn(true)} />
+            <AuthPage />
           )
         }
       />
@@ -44,8 +38,8 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-      <Route element={<ProtectedRoute isAuthenticated={isLoggedIn} />}>
-        <Route element={<AppShell email={localStorage.getItem("email")} onLogout={handleLogout} />}>
+      <Route element={<ProtectedRoute key={session.generation} isAuthenticated={isLoggedIn} />}>
+        <Route element={<AppShell email={session.email} onLogout={clearSession} />}>
           <Route path="/overview" element={<OverviewPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/budgets" element={<BudgetsPage />} />
@@ -53,7 +47,7 @@ export default function App() {
           <Route path="/commitments" element={<CommitmentsPage />} />
           <Route path="/paychecks" element={<PaychecksPage />} />
           <Route path="/investing" element={<InvestingPage />} />
-          <Route path="/settings" element={<SettingsPage email={localStorage.getItem("email")} />} />
+          <Route path="/settings" element={<SettingsPage email={session.email} />} />
         </Route>
       </Route>
 

@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { authApi } from "../../../shared/api/authApi";
+import { establishSession } from "../../../shared/auth/session";
 import { Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -39,10 +40,9 @@ export default function AuthPage({ onLogin }) {
 
       const res = await authApi.login({ email, password });
 
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("email", res.data.email);
+      establishSession(res.data.token, res.data.email);
 
-      onLogin();
+      onLogin?.();
     } catch (err) {
       console.log("Auth error:", err.response?.data || err.message);
 

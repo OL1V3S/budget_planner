@@ -105,6 +105,15 @@ inspect privacy-safe platform status or sanitized application logs. Route a
 deployment-only defect to separately scoped work rather than expanding the
 current issue.
 
+For frontend delivery, verify the actual documented production URL, its assigned
+deployment/source commit, and the assets it serves. A successful preview or
+GitHub deployment status alone does not prove that the production alias has the
+new frontend. When authenticated smoke is authorized, verify the changed route
+and navigation on that exact URL using a private test session; disclose missing
+alias or session access instead of claiming delivery. Alias, domain, project,
+build-setting, environment-variable, and secret changes retain their separate
+authorization gates.
+
 ## Smoke checks after a change
 
 A smoke check is the smallest changed-boundary behavior check after focused

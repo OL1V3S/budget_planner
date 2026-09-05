@@ -41,7 +41,14 @@ constants, theme, UI, and utilities live under
 
 Feature UI and hooks depend on feature or shared API modules. Shared modules
 must not depend on feature-specific UI. The Axios client is the common API
-transport and attaches the current bearer token to requests.
+transport and attaches the current bearer token to requests. A shared session
+module under `frontend/src/shared/auth/` owns the existing token/email storage
+and synchronizes authentication state with React and ordinary cross-tab storage
+changes. An authenticated API `401` clears the matching current session without
+replaying the request; public auth operations explicitly retain their own error
+handling. Request session identity and a per-tab generation prevent late failures
+from invalidating a newer session established in that tab. The backend remains
+authoritative for token validity; the frontend does not refresh or extend tokens.
 
 ### Backend
 

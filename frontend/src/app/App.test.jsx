@@ -1,12 +1,24 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { StrictMode, useState } from 'react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { AxiosError } from 'axios'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { ThemeProvider } from '../shared/theme/ThemeProvider'
+import client from '../shared/api/client'
+import { authApi } from '../shared/api/authApi'
 
 vi.mock('../features/transactions/pages/TransactionsPage', () => ({
-  default: () => <h1>Transactions workspace</h1>,
+  default: function TransactionsWorkspace() {
+    const [dataOwner] = useState(() => localStorage.getItem('email'))
+    const [draft, setDraft] = useState('')
+    return <>
+      <h1>Transactions workspace</h1>
+      <p>Loaded transactions for {dataOwner}</p>
+      <input aria-label="Transaction draft" value={draft} onChange={(event) => setDraft(event.target.value)} />
+    </>
+  },
 }))
 
 vi.mock('../features/budgetLimits/pages/BudgetsPage', () => ({
@@ -50,16 +62,21 @@ function LocationProbe() {
   return <span data-testid="location">{location.pathname}</span>
 }
 
-function renderAt(path) {
+function renderAt(path, { strict = false } = {}) {
+  const application = <ThemeProvider><App /><LocationProbe /></ThemeProvider>
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <ThemeProvider>
-        <App />
-        <LocationProbe />
-      </ThemeProvider>
+      {strict ? <StrictMode>{application}</StrictMode> : application}
     </MemoryRouter>,
   )
 }
+
+function rejectSession(config) {
+  return Promise.reject(new AxiosError('Unauthorized', AxiosError.ERR_BAD_REQUEST,
+    config, undefined, { status: 401, data: {}, headers: {}, config }))
+}
+
+const originalAdapter = client.defaults.adapter
 
 describe('application routes and shell', () => {
   beforeEach(() => {
@@ -67,7 +84,10 @@ describe('application routes and shell', () => {
     document.documentElement.removeAttribute('data-theme')
   })
 
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => {
+    client.defaults.adapter = originalAdapter
+    vi.unstubAllGlobals()
+  })
 
   it('shows the existing authentication experience at the root without a token', () => {
     renderAt('/')
@@ -129,6 +149,10 @@ describe('application routes and shell', () => {
     expect(navigation).toBeInTheDocument()
     expect(navigation.querySelectorAll('a')).toHaveLength(7)
     expect(within(navigation).getByRole('link', { name: 'Paychecks' })).toHaveAttribute('href', '/paychecks')
+    for (const label of ['Overview', 'Transactions', 'Budgets', 'Analytics', 'Commitments', 'Paychecks', 'Investing']) {
+      const link = within(navigation).getByRole('link', { name: label })
+      expect(within(link).getByText(label, { selector: 'span:not(.sr-only)' })).toBeInTheDocument()
+    }
     expect(screen.getAllByRole('link', { name: /Settings/ })).toHaveLength(2)
   })
 
@@ -154,6 +178,126 @@ describe('application routes and shell', () => {
     expect(localStorage.getItem('token')).toBeNull()
     expect(localStorage.getItem('email')).toBeNull()
     expect(await screen.findByRole('heading', { name: 'Authentication content' })).toBeInTheDocument()
+  })
+
+  it.each(['/overview', '/transactions', '/budgets', '/analytics', '/commitments', '/paychecks', '/investing', '/settings'])(
+    'recovers from a stale stored session on %s when the first protected request returns 401', async (path) => {
+      localStorage.setItem('token', 'synthetic-malformed-session')
+      localStorage.setItem('email', 'stale@example.invalid')
+      localStorage.setItem('budget-planner-theme', 'dark')
+      const adapter = vi.fn(rejectSession)
+      renderAt(path)
+      expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument()
+
+      await act(async () => {
+        await expect(client.get('/api/paychecks', { adapter })).rejects.toMatchObject({ response: { status: 401 } })
+      })
+
+      expect(adapter).toHaveBeenCalledOnce()
+      expect(await screen.findByRole('heading', { name: 'Authentication content' })).toBeInTheDocument()
+      expect(screen.getByTestId('location')).toHaveTextContent(/^\/$/)
+      expect(screen.queryByRole('navigation', { name: 'Primary navigation' })).not.toBeInTheDocument()
+      expect(screen.queryByText('stale@example.invalid')).not.toBeInTheDocument()
+      expect(localStorage.getItem('token')).toBeNull()
+      expect(localStorage.getItem('email')).toBeNull()
+      expect(localStorage.getItem('budget-planner-theme')).toBe('dark')
+    },
+  )
+
+  it('leaves protected navigation on a write 401 without retrying the mutation', async () => {
+    localStorage.setItem('token', 'synthetic-session')
+    localStorage.setItem('email', 'person@example.invalid')
+    const adapter = vi.fn(rejectSession)
+    renderAt('/overview')
+    await userEvent.setup().click(within(screen.getByRole('navigation', { name: 'Primary navigation' })).getByRole('link', { name: /Paychecks/ }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/paychecks')
+
+    await act(async () => {
+      await expect(client.post('/api/paychecks', { displayName: 'Synthetic expectation' }, { adapter })).rejects.toMatchObject({ response: { status: 401 } })
+    })
+
+    expect(adapter).toHaveBeenCalledOnce()
+    expect(await screen.findByRole('heading', { name: 'Authentication content' })).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/$/)
+    expect(localStorage.getItem('token')).toBeNull()
+    expect(localStorage.getItem('email')).toBeNull()
+  })
+
+  it('keeps the protected shell and identity after a successful authenticated response', async () => {
+    localStorage.setItem('token', 'synthetic-session')
+    localStorage.setItem('email', 'person@example.invalid')
+    renderAt('/paychecks')
+    await act(async () => {
+      await client.get('/api/paychecks', { adapter: async (config) => ({ data: [], status: 200, headers: {}, config }) })
+    })
+    expect(screen.getByRole('heading', { name: 'Paychecks workspace' })).toBeInTheDocument()
+    expect(screen.getByText('person@example.invalid')).toBeInTheDocument()
+    expect(localStorage.getItem('token')).toBe('synthetic-session')
+  })
+
+  it('keeps public recovery routing and stored identity when a public auth request returns 401', async () => {
+    localStorage.setItem('token', 'synthetic-session')
+    localStorage.setItem('email', 'person@example.invalid')
+    client.defaults.adapter = vi.fn(rejectSession)
+    renderAt('/forgot-password')
+    await act(async () => {
+      await expect(authApi.forgotPassword({ email: 'person@example.invalid' })).rejects.toMatchObject({ response: { status: 401 } })
+    })
+    expect(screen.getByRole('heading', { name: 'Forgot password content' })).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('/forgot-password')
+    expect(localStorage.getItem('token')).toBe('synthetic-session')
+    expect(localStorage.getItem('email')).toBe('person@example.invalid')
+  })
+
+  it('observes invalidation before subscription and through StrictMode remounts', async () => {
+    localStorage.setItem('token', 'synthetic-session')
+    localStorage.setItem('email', 'person@example.invalid')
+    await expect(client.get('/api/paychecks', { adapter: rejectSession })).rejects.toMatchObject({ response: { status: 401 } })
+    const first = renderAt('/paychecks', { strict: true })
+    expect(await screen.findByRole('heading', { name: 'Authentication content' })).toBeInTheDocument()
+    first.unmount()
+
+    localStorage.setItem('token', 'another-synthetic-session')
+    renderAt('/paychecks', { strict: true })
+    await act(async () => {
+      await expect(client.get('/api/paychecks', { adapter: rejectSession })).rejects.toMatchObject({ response: { status: 401 } })
+    })
+    expect(await screen.findByRole('heading', { name: 'Authentication content' })).toBeInTheDocument()
+  })
+
+  it('synchronizes another tab clearing the session without waiting for an API request', async () => {
+    localStorage.setItem('token', 'synthetic-session')
+    localStorage.setItem('email', 'person@example.invalid')
+    renderAt('/paychecks')
+    act(() => {
+      localStorage.removeItem('token')
+      localStorage.removeItem('email')
+      window.dispatchEvent(new StorageEvent('storage', { key: 'token', storageArea: localStorage }))
+    })
+    expect(await screen.findByRole('heading', { name: 'Authentication content' })).toBeInTheDocument()
+    expect(screen.queryByText('person@example.invalid')).not.toBeInTheDocument()
+  })
+
+  it('discards protected page data and drafts when another tab replaces the session', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem('token', 'first-session')
+    localStorage.setItem('email', 'first@example.invalid')
+    renderAt('/transactions')
+    expect(screen.getByText('Loaded transactions for first@example.invalid')).toBeInTheDocument()
+    await user.type(screen.getByRole('textbox', { name: 'Transaction draft' }), 'First account draft')
+
+    act(() => {
+      // A suspended tab can observe the replacement before queued logout events.
+      localStorage.setItem('token', 'second-session')
+      localStorage.setItem('email', 'second@example.invalid')
+      window.dispatchEvent(new StorageEvent('storage', { key: 'token', storageArea: localStorage }))
+    })
+
+    expect(screen.getByText('second@example.invalid')).toBeInTheDocument()
+    expect(screen.queryByText('Loaded transactions for first@example.invalid')).not.toBeInTheDocument()
+    expect(screen.getByText('Loaded transactions for second@example.invalid')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Transaction draft' })).toHaveValue('')
+    expect(screen.getByTestId('location')).toHaveTextContent('/transactions')
   })
 
   it('exposes account identity and logout through the mobile account menu', async () => {

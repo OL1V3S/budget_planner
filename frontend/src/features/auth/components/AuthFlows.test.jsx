@@ -44,6 +44,38 @@ describe('existing authentication flows', () => {
     expect(localStorage.getItem('email')).toBe('person@example.com')
   })
 
+  it('establishes the session without requiring an App callback', async () => {
+    const user = userEvent.setup()
+    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    authApi.login.mockResolvedValue({ data: { token: 'new-synthetic-session', email: 'person@example.invalid' } })
+    renderAt(<AuthPage />)
+    await user.type(screen.getByLabelText('Email'), 'person@example.invalid')
+    await user.type(screen.getByLabelText('Password'), 'Synthetic1!')
+    await user.click(screen.getByRole('button', { name: 'Log In' }))
+    await waitFor(() => expect(localStorage.getItem('token')).toBe('new-synthetic-session'))
+    expect(localStorage.getItem('email')).toBe('person@example.invalid')
+    expect(alert).not.toHaveBeenCalled()
+    alert.mockRestore()
+  })
+
+  it('retains the public login 401 message without establishing a session', async () => {
+    const user = userEvent.setup()
+    const onLogin = vi.fn()
+    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    authApi.login.mockRejectedValue({ response: { status: 401, data: 'Invalid credentials' } })
+    renderAt(<AuthPage onLogin={onLogin} />)
+    await user.type(screen.getByLabelText('Email'), 'person@example.invalid')
+    await user.type(screen.getByLabelText('Password'), 'Synthetic1!')
+    await user.click(screen.getByRole('button', { name: 'Log In' }))
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Invalid credentials'))
+    expect(onLogin).not.toHaveBeenCalled()
+    expect(localStorage.getItem('token')).toBeNull()
+    expect(localStorage.getItem('email')).toBeNull()
+    log.mockRestore()
+    alert.mockRestore()
+  })
+
   it('keeps the neutral registration delivery failure and rate-limit presentation', async () => {
     const user = userEvent.setup()
     authApi.register.mockRejectedValue({

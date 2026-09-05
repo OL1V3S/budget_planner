@@ -1,0 +1,65 @@
+.paychecks-page { display: grid; gap: var(--space-6); padding-bottom: var(--space-5); }
+.paychecks-page > .page-header { margin-bottom: 0; }
+.paycheck-create { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); white-space: nowrap; }
+.paycheck-feedback:empty { display: none; }
+.paycheck-feedback { display: grid; justify-items: start; gap: var(--space-2); }
+.paycheck-feedback p { margin: 0; }
+.paycheck-feedback button { margin-top: var(--space-1); }
+.paycheck-section, .paycheck-group { display: grid; min-width: 0; gap: var(--space-4); }
+.paycheck-section__header { display: flex; align-items: start; justify-content: space-between; gap: var(--space-4); }
+.paycheck-section h2 { margin-bottom: var(--space-2); }
+.paycheck-section header p { margin-bottom: 0; }
+.paycheck-evaluated { flex-shrink: 0; padding-top: var(--space-1); color: var(--color-text-muted); font-size: var(--text-sm); }
+.paycheck-group__label { display: flex; gap: var(--space-2); align-items: center; margin: var(--space-2) 0 0; font-weight: 800; }
+.paycheck-group__label span { display: inline-grid; place-items: center; min-width: 26px; min-height: 26px; border-radius: var(--radius-pill); background: var(--color-surface-raised); font-size: var(--text-sm); }
+.paycheck-card { display: grid; min-width: 0; gap: var(--space-4); box-shadow: var(--shadow-sm); }
+.paycheck-card--active { border-left: 3px solid var(--color-primary); }
+.paycheck-card__header { display: flex; align-items: start; justify-content: space-between; gap: var(--space-4); }
+.paycheck-card__header > div { min-width: 0; }
+.paycheck-card h3, .paycheck-card p, .paycheck-card dd { overflow-wrap: anywhere; }
+.paycheck-card h3 { margin-bottom: var(--space-2); font-size: var(--text-xl); }
+.paycheck-eyebrow { margin: 0 0 var(--space-2); color: var(--color-text-muted); font-size: var(--text-xs); letter-spacing: .06em; text-transform: uppercase; font-weight: 800; }
+.paycheck-card__amount { display: grid; gap: var(--space-1); flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.paycheck-card__amount span { color: var(--color-text-muted); font-size: var(--text-xs); }
+.paycheck-card__amount strong { font-size: var(--text-xl); }
+.paycheck-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: 0; }
+.paycheck-facts > div { min-width: 0; }
+.paycheck-facts dt { margin-bottom: var(--space-1); color: var(--color-text-muted); font-size: var(--text-sm); }
+.paycheck-facts dd { margin: 0; }
+.paycheck-projection { padding: var(--space-4); background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface)); border: 1px solid color-mix(in srgb, var(--color-primary) 20%, var(--color-border)); border-radius: var(--radius-sm); }
+.paycheck-projection p { margin-bottom: var(--space-2); }
+.paycheck-projection p:last-child { margin: 0; font-size: var(--text-sm); }
+.paycheck-projection__date { font-size: var(--text-xl); font-weight: 800; font-variant-numeric: tabular-nums; }
+.paycheck-inactive { padding: var(--space-3); margin: 0; border: 1px solid var(--color-divider); color: var(--color-text-muted); border-radius: var(--radius-sm); }
+.paycheck-evidence { min-width: 0; border-block: 1px solid var(--color-divider); padding-block: var(--space-3); }
+.paycheck-evidence summary { width: fit-content; max-width: 100%; min-height: 32px; cursor: pointer; font-weight: 700; }
+.paycheck-evidence__list { display: grid; gap: var(--space-3); margin: var(--space-3) 0 0; padding: 0; list-style: none; }
+.paycheck-evidence__row { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius-sm); background: var(--color-surface-subtle); overflow-wrap: anywhere; }
+.paycheck-evidence__row > div { display: grid; min-width: 0; gap: var(--space-1); }
+.paycheck-evidence__row span { color: var(--color-text-muted); font-size: var(--text-sm); }
+.paycheck-evidence__row > strong { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.paycheck-evidence__row .paycheck-evidence__edited { color: var(--color-text); font-weight: 700; }
+.paycheck-actions { flex-wrap: wrap; }
+.paycheck-schedule-note { margin: 0; font-size: var(--text-sm); }
+.paycheck-empty { display: grid; justify-items: start; gap: var(--space-2); margin: 0; padding: var(--space-5); background: var(--color-surface); border: 1px dashed var(--color-border); border-radius: var(--radius-md); color: var(--color-text-muted); }
+.paycheck-empty h3, .paycheck-empty p { margin: 0; }
+.paycheck-empty h3 { color: var(--color-text); }
+.paycheck-manual { padding: var(--space-5); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.paycheck-form { display: grid; min-width: 0; gap: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-divider); }
+.paycheck-form__fields { min-width: 0; margin: 0; padding: 0; border: 0; }
+.paycheck-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.paycheck-form input, .paycheck-form select { max-width: 100%; min-width: 0; }
+.paycheck-form__schedule, .paycheck-form__note { margin: 0; color: var(--color-text-muted); }
+.paycheck-form__error { margin: 0; color: var(--color-danger); }
+.paycheck-form__actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.paycheck-end-confirmation { padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); }
+.paycheck-end-confirmation p { margin-bottom: var(--space-3); }
+.paychecks-page h2:focus, .paycheck-feedback:focus { outline: 3px solid color-mix(in srgb, var(--color-focus) 55%, transparent); outline-offset: 3px; }
+@media (max-width: 720px) {
+  .paycheck-card__header, .paycheck-section__header, .paycheck-evidence__row { flex-direction: column; }
+  .paycheck-card__amount { text-align: left; flex-shrink: 1; }
+  .paycheck-card__amount strong { overflow-wrap: anywhere; }
+  .paycheck-facts, .paycheck-form__grid { grid-template-columns: minmax(0, 1fr); }
+  .paycheck-manual { padding: var(--space-4); }
+  .paycheck-evaluated { margin: 0; padding: 0; }
+}

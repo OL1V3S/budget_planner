@@ -18,7 +18,7 @@ body {
 }
 button, input, select, textarea { font: inherit; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
-:focus-visible { outline: 3px solid color-mix(in srgb, var(--color-focus) 55%, transparent); outline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 h1, h2, h3, p { margin-top: 0; }
 h1 { margin-bottom: var(--space-2); font-size: var(--text-2xl); line-height: 1.1; letter-spacing: -0.04em; }
 .h2 { margin-bottom: var(--space-4); font-size: var(--text-xl); line-height: 1.25; letter-spacing: -0.025em; }

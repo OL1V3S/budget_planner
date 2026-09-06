@@ -16,6 +16,8 @@ import ProtectedRoute from "./ProtectedRoute";
 import OverviewPage from "./pages/OverviewPage";
 import InvestingPage from "./pages/InvestingPage";
 import SettingsPage from "./pages/SettingsPage";
+import PlanPage from "./pages/PlanPage";
+import MorePage from "./pages/MorePage";
 
 export default function App() {
   const session = useSyncExternalStore(subscribeToSession, getSessionSnapshot);
@@ -44,6 +46,8 @@ export default function App() {
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/budgets" element={<BudgetsPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/plan" element={<PlanPage />} />
+          <Route path="/more" element={<MorePage />} />
           <Route path="/commitments" element={<CommitmentsPage />} />
           <Route path="/paychecks" element={<PaychecksPage />} />
           <Route path="/investing" element={<InvestingPage />} />

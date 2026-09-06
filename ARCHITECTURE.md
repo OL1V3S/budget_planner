@@ -39,6 +39,13 @@ constants, theme, UI, and utilities live under
 `frontend/src/shared/`; chart-specific presentation lives under
 `frontend/src/charts/`.
 
+Below the desktop sidebar breakpoint, the shell exposes Home, Activity, Plan,
+Insights, and More. The protected `/plan` and `/more` pages group links to the
+existing feature URLs without owning feature data or changing their workflows.
+Desktop retains individual destinations. Home preserves the recorded-spending
+summary and offers direct links to the planning features. Theme tokens also
+drive chart presentation in explicit and system appearance modes.
+
 Feature UI and hooks depend on feature or shared API modules. Shared modules
 must not depend on feature-specific UI. The Axios client is the common API
 transport and attaches the current bearer token to requests. A shared session

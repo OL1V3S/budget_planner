@@ -54,7 +54,7 @@
 .paycheck-form__actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .paycheck-end-confirmation { padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); }
 .paycheck-end-confirmation p { margin-bottom: var(--space-3); }
-.paychecks-page h2:focus, .paycheck-feedback:focus { outline: 3px solid color-mix(in srgb, var(--color-focus) 55%, transparent); outline-offset: 3px; }
+.paychecks-page h2:focus, .paycheck-feedback:focus { outline: 3px solid var(--color-focus); outline-offset: 3px; }
 @media (max-width: 720px) {
   .paycheck-card__header, .paycheck-section__header, .paycheck-evidence__row { flex-direction: column; }
   .paycheck-card__amount { text-align: left; flex-shrink: 1; }

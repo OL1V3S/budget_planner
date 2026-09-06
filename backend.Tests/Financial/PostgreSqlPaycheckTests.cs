@@ -411,9 +411,14 @@ public sealed class PostgreSqlPaycheckTests
                 await transaction.CommitAsync();
                 return true;
             }
-            catch (Exception exception) when (exception is PostgresException or DbUpdateException)
+            catch (Exception exception)
             {
-                var postgres = exception as PostgresException ?? exception.InnerException as PostgresException;
+                Exception? cause = exception;
+                while (cause is not null && cause is not PostgresException)
+                {
+                    cause = cause.InnerException;
+                }
+                var postgres = cause as PostgresException;
                 Assert.NotNull(postgres);
                 Assert.Contains(postgres.SqlState, new[] { PostgresErrorCodes.UniqueViolation, PostgresErrorCodes.SerializationFailure });
                 await transaction.RollbackAsync();

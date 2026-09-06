@@ -20,9 +20,4 @@
   --duration-fast: 120ms;
   --duration-normal: 200ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
-  --chart-1: #e94f2d;
-  --chart-2: #6f6b66;
-  --chart-3: #b49a7f;
-  --chart-4: #3d3b38;
-  --chart-5: #b6422a;
 }

@@ -2,7 +2,7 @@ import { StrictMode, useState } from 'react'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import { AxiosError } from 'axios'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, useLocation } from 'react-router-dom'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { ThemeProvider } from '../shared/theme/ThemeProvider'
@@ -59,7 +59,12 @@ vi.mock('../features/auth/components/ResetPasswordPage', () => ({
 
 function LocationProbe() {
   const location = useLocation()
-  return <span data-testid="location">{location.pathname}</span>
+  const navigate = useNavigate()
+  return <>
+    <span data-testid="location">{location.pathname}</span>
+    <button onClick={() => navigate(-1)}>Test history back</button>
+    <button onClick={() => navigate(1)}>Test history forward</button>
+  </>
 }
 
 function renderAt(path, { strict = false } = {}) {
@@ -81,6 +86,7 @@ const originalAdapter = client.defaults.adapter
 describe('application routes and shell', () => {
   beforeEach(() => {
     localStorage.clear()
+    vi.stubGlobal('scrollTo', vi.fn())
     document.documentElement.removeAttribute('data-theme')
   })
 
@@ -103,7 +109,7 @@ describe('application routes and shell', () => {
     expect(screen.getAllByText('ordo')).toHaveLength(2)
   })
 
-  it.each(['/transactions', '/paychecks'])('redirects protected %s to authentication without a token', async (path) => {
+  it.each(['/transactions', '/paychecks', '/plan', '/more'])('redirects protected %s to authentication without a token', async (path) => {
     renderAt(path)
     expect(await screen.findByRole('heading', { name: 'Authentication content' })).toBeInTheDocument()
     expect(screen.getByTestId('location')).toHaveTextContent('/')
@@ -114,6 +120,8 @@ describe('application routes and shell', () => {
     ['/transactions', 'Transactions workspace'],
     ['/budgets', 'Budgets workspace'],
     ['/analytics', 'Analytics workspace'],
+    ['/plan', 'Plan'],
+    ['/more', 'More'],
     ['/commitments', 'Commitments workspace'],
     ['/paychecks', 'Paychecks workspace'],
     ['/investing', 'Investing'],
@@ -129,9 +137,8 @@ describe('application routes and shell', () => {
   it('marks the current destination in desktop and mobile navigation', () => {
     localStorage.setItem('token', 'jwt-value')
     renderAt('/transactions')
-    const currentLinks = screen.getAllByRole('link', { name: /Transactions/ })
-    expect(currentLinks).toHaveLength(2)
-    currentLinks.forEach((link) => expect(link).toHaveAttribute('aria-current', 'page'))
+    expect(within(screen.getByRole('navigation', { name: 'Primary navigation' })).getByRole('link', { name: /Transactions/ })).toHaveAttribute('aria-current', 'page')
+    expect(within(screen.getByRole('navigation', { name: 'Mobile navigation' })).getByRole('link', { name: 'Activity' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('provides a keyboard skip link to the main content', () => {
@@ -142,28 +149,114 @@ describe('application routes and shell', () => {
     expect(document.getElementById('main-content')).toHaveAttribute('id', 'main-content')
   })
 
-  it('exposes seven primary destinations in mobile navigation and keeps Settings directly reachable', () => {
+  it('exposes five labeled mobile destinations while preserving desktop destination order', () => {
     localStorage.setItem('token', 'jwt-value')
     renderAt('/overview')
     const navigation = screen.getByRole('navigation', { name: 'Mobile navigation' })
     expect(navigation).toBeInTheDocument()
-    expect(navigation.querySelectorAll('a')).toHaveLength(7)
-    expect(within(navigation).getByRole('link', { name: 'Paychecks' })).toHaveAttribute('href', '/paychecks')
-    for (const label of ['Overview', 'Transactions', 'Budgets', 'Analytics', 'Commitments', 'Paychecks', 'Investing']) {
+    expect(navigation.querySelectorAll('a')).toHaveLength(5)
+    expect([...navigation.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual(['/overview', '/transactions', '/plan', '/analytics', '/more'])
+    for (const label of ['Home', 'Activity', 'Plan', 'Insights', 'More']) {
       const link = within(navigation).getByRole('link', { name: label })
       expect(within(link).getByText(label, { selector: 'span:not(.sr-only)' })).toBeInTheDocument()
     }
+    const desktop = screen.getByRole('navigation', { name: 'Primary navigation' })
+    expect([...desktop.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual(['/overview', '/transactions', '/budgets', '/analytics', '/commitments', '/paychecks', '/investing'])
     expect(screen.getAllByRole('link', { name: /Settings/ })).toHaveLength(2)
   })
 
-  it('opens Paychecks through normal navigation and marks both navigation entries current', async () => {
+  it('opens Paychecks through desktop navigation and marks the mobile Plan group current', async () => {
     const user = userEvent.setup()
     localStorage.setItem('token', 'jwt-value')
     renderAt('/overview')
     await user.click(within(screen.getByRole('navigation', { name: 'Primary navigation' })).getByRole('link', { name: /Paychecks/ }))
     expect(await screen.findByRole('heading', { name: 'Paychecks workspace' })).toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: /Paychecks/ })).toHaveLength(2)
-    screen.getAllByRole('link', { name: /Paychecks/ }).forEach((link) => expect(link).toHaveAttribute('aria-current', 'page'))
+    expect(within(screen.getByRole('navigation', { name: 'Primary navigation' })).getByRole('link', { name: /Paychecks/ })).toHaveAttribute('aria-current', 'page')
+    expect(within(screen.getByRole('navigation', { name: 'Mobile navigation' })).getByRole('link', { name: 'Plan' })).toHaveAttribute('aria-current', 'location')
+  })
+
+  it.each([
+    ['/overview', 'Home', 'page'], ['/transactions', 'Activity', 'page'],
+    ['/plan', 'Plan', 'page'], ['/budgets', 'Plan', 'location'],
+    ['/commitments', 'Plan', 'location'], ['/paychecks', 'Plan', 'location'],
+    ['/paychecks/?source=bookmark', 'Plan', 'location'], ['/analytics', 'Insights', 'page'],
+    ['/more', 'More', 'page'], ['/investing', 'More', 'location'], ['/settings', 'More', 'location'],
+  ])('selects only the correct mobile destination for %s', (path, label, current) => {
+    localStorage.setItem('token', 'synthetic-session')
+    renderAt(path)
+    const mobile = screen.getByRole('navigation', { name: 'Mobile navigation' })
+    expect(mobile.querySelectorAll('[aria-current]')).toHaveLength(1)
+    expect(within(mobile).getByRole('link', { name: label })).toHaveAttribute('aria-current', current)
+  })
+
+  it.each([
+    ['/budgets', 'Plan', '/plan'], ['/commitments', 'Plan', '/plan'], ['/paychecks', 'Plan', '/plan'],
+    ['/investing', 'More', '/more'], ['/settings', 'More', '/more'],
+  ])('provides a deterministic parent link for direct bookmark %s', async (path, parent, target) => {
+    const user = userEvent.setup()
+    localStorage.setItem('token', 'synthetic-session')
+    renderAt(path)
+    const main = screen.getByRole('main')
+    const link = within(main).getByRole('link', { name: parent })
+    expect(link).toHaveAttribute('href', target)
+    await user.click(link)
+    expect(within(main).getByRole('heading', { level: 1, name: parent })).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent(target)
+    expect(main).toHaveFocus()
+  })
+
+  it('navigates hubs and history with main focus, without treating More as a modal', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem('token', 'synthetic-session')
+    renderAt('/overview')
+    const mobile = screen.getByRole('navigation', { name: 'Mobile navigation' })
+    const main = screen.getByRole('main')
+    window.scrollTo.mockClear()
+    await user.click(within(mobile).getByRole('link', { name: 'Plan' }))
+    expect(main).toHaveFocus()
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'instant' })
+    window.scrollTo.mockClear()
+    await user.click(within(main).getByRole('link', { name: /Paychecks/ }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/paychecks')
+    expect(main).toHaveFocus()
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'instant' })
+    window.scrollTo.mockClear()
+    await user.click(screen.getByRole('button', { name: 'Test history back' }))
+    expect(within(main).getByRole('heading', { name: 'Plan', level: 1 })).toBeInTheDocument()
+    expect(main).toHaveFocus()
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'instant' })
+    window.scrollTo.mockClear()
+    await user.click(screen.getByRole('button', { name: 'Test history forward' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/paychecks')
+    expect(main).toHaveFocus()
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'instant' })
+    window.scrollTo.mockClear()
+    await user.click(within(mobile).getByRole('link', { name: 'More' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(within(main).getByRole('heading', { name: 'More', level: 1 })).toBeInTheDocument()
+    expect(main).toHaveFocus()
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'instant' })
+    window.scrollTo.mockClear()
+    await user.click(within(main).getByRole('link', { name: /Settings/ }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/settings')
+    expect(main).toHaveFocus()
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'instant' })
+    window.scrollTo.mockClear()
+  })
+
+  it('does not steal focus during in-page edits or theme changes', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem('token', 'synthetic-session')
+    renderAt('/transactions')
+    window.scrollTo.mockClear()
+    const draft = screen.getByRole('textbox', { name: 'Transaction draft' })
+    await user.type(draft, 'Preserved draft')
+    expect(draft).toHaveFocus()
+    const theme = screen.getByRole('combobox', { name: 'Theme' })
+    await user.selectOptions(theme, 'dark')
+    expect(theme).toHaveFocus()
+    expect(draft).toHaveValue('Preserved draft')
+    expect(window.scrollTo).not.toHaveBeenCalled()
   })
 
   it('clears the existing auth keys and returns to authentication on logout', async () => {
@@ -180,7 +273,7 @@ describe('application routes and shell', () => {
     expect(await screen.findByRole('heading', { name: 'Authentication content' })).toBeInTheDocument()
   })
 
-  it.each(['/overview', '/transactions', '/budgets', '/analytics', '/commitments', '/paychecks', '/investing', '/settings'])(
+  it.each(['/overview', '/transactions', '/plan', '/more', '/budgets', '/analytics', '/commitments', '/paychecks', '/investing', '/settings'])(
     'recovers from a stale stored session on %s when the first protected request returns 401', async (path) => {
       localStorage.setItem('token', 'synthetic-malformed-session')
       localStorage.setItem('email', 'stale@example.invalid')

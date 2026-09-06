@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, BarChart3, ChartNoAxesCombined, Landmark, ReceiptText } from "lucide-react";
+import { ArrowRight, CalendarRange, ChartNoAxesCombined, ReceiptText } from "lucide-react";
 import { useBudgetLimits } from "../../features/budgetLimits/hooks/useBudgetLimits";
 import { computeMonthlyTotalsByCategory } from "../../features/budgetLimits/utils/totalsByCategory";
 import { useExpenses } from "../../features/expenses/hooks/useExpenses";
@@ -91,28 +91,28 @@ export default function OverviewPage() {
               </>
             )}
           </section>
-          <Card className="overview-module overview-module--transactions">
+          <Card className="overview-module overview-module--activity">
             <div className="overview-module__heading">
               <ReceiptText size={24} aria-hidden="true" />
               <span className="overview-module__status">Available now</span>
             </div>
-            <div><h2 className="h2">Transactions</h2><p>Record, edit, search, filter, and review expenses in the established workspace.</p></div>
-            <Link to="/transactions">Open transactions <span aria-hidden="true">→</span></Link>
+            <div><h2 className="h2">Activity</h2><p>Record, edit, search, filter, and review expenses in the established workspace.</p></div>
+            <Link to="/transactions">Open activity <span aria-hidden="true">→</span></Link>
           </Card>
-          <Card className="overview-module overview-module--budgets">
-            <div className="overview-module__heading"><BarChart3 size={22} aria-hidden="true" /><span className="overview-module__status">Available now</span></div>
-            <div><h2 className="h2">Budgets</h2><p>Set and review monthly category limits.</p></div>
-            <Link to="/budgets">Open budgets <span aria-hidden="true">→</span></Link>
+          <Card className="overview-module overview-module--plan">
+            <div className="overview-module__heading"><CalendarRange size={22} aria-hidden="true" /><span className="overview-module__status">Available now</span></div>
+            <div><h2 className="h2">Plan</h2><p>Shape your budget, recurring commitments, and expected paychecks.</p></div>
+            <Link to="/plan">Open plan <span aria-hidden="true">→</span></Link>
+            <div className="overview-module__links" aria-label="Planning tools">
+              <Link to="/budgets">Budgets</Link>
+              <Link to="/commitments">Commitments</Link>
+              <Link to="/paychecks">Paychecks</Link>
+            </div>
           </Card>
-          <Card className="overview-module overview-module--analytics">
+          <Card className="overview-module overview-module--insights">
             <div className="overview-module__heading"><ChartNoAxesCombined size={22} aria-hidden="true" /><span className="overview-module__status">Available now</span></div>
-            <div><h2 className="h2">Analytics</h2><p>Compare recorded spending with category limits by month.</p></div>
-            <Link to="/analytics">Open analytics <span aria-hidden="true">→</span></Link>
-          </Card>
-          <Card className="overview-module overview-module--investing">
-            <div className="overview-module__heading"><Landmark size={22} aria-hidden="true" /><span className="overview-module__status">Coming later</span></div>
-            <div><h2 className="h2">Investing</h2><p>No portfolio or external service is connected today.</p></div>
-            <Link to="/investing">See status <span aria-hidden="true">→</span></Link>
+            <div><h2 className="h2">Insights</h2><p>Compare recorded spending with category limits by month.</p></div>
+            <Link to="/analytics">Open insights <span aria-hidden="true">→</span></Link>
           </Card>
       </section>
     </div>

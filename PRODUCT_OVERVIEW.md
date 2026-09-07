@@ -20,9 +20,10 @@ silently treating every detected pattern as a financial fact.
 
 ## What you can do today
 
-- **Home / Overview:** See the current month's recorded spending, how many
-  categories have spending, and how many category limits are at or above 90%
-  used. Follow links into activity, planning, and insights.
+- **Home / Overview:** Compare this month's recorded cash in, spending, and net
+  recorded cash flow. See expected paycheck windows, category limits at or above
+  90% used, active commitments, and recent spending, with links to each workflow.
+  Each section shows its own loading or retry state when a read is unavailable.
 - **Activity / Transactions:** Add, edit, and delete expenses. Search descriptions
   and categories, filter by category or date range, and review the underlying
   records behind spending summaries.

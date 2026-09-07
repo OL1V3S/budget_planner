@@ -1,6 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { authApi } from "../../../shared/api/authApi";
+import AuthShell from "./AuthShell";
+
+const confirmationCopy = {
+  loading: {
+    title: "Confirming email",
+    message: "Please wait...",
+    tone: "info",
+  },
+  success: {
+    title: "Email confirmed",
+    message: "You can now log in.",
+    tone: "success",
+  },
+  error: {
+    title: "Unable to confirm email",
+    message:
+      "This confirmation link is invalid, expired, or already used. Try logging in or request a new confirmation email.",
+    tone: "danger",
+  },
+};
 
 export default function ConfirmEmailPage() {
   const [searchParams] = useSearchParams();
@@ -28,43 +48,27 @@ export default function ConfirmEmailPage() {
     else setStatus("error");
   }, [searchParams]);
 
+  const content = confirmationCopy[status];
+
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <h1>ordo</h1>
+    <AuthShell title={content.title}>
+      <p
+        className={`auth-status auth-status--${content.tone}`}
+        role={content.tone === "danger" ? "alert" : "status"}
+        aria-live={content.tone === "danger" ? "assertive" : "polite"}
+      >
+        {content.message}
+      </p>
 
-        {status === "loading" && (
-          <>
-            <h2 className="h2">Confirming Email</h2>
-            <p className="auth-help">Please wait...</p>
-          </>
-        )}
-
-        {status === "success" && (
-          <>
-            <h2 className="h2">Email Confirmed</h2>
-            <p className="auth-help">You can now log in.</p>
-          </>
-        )}
-
-        {status === "error" && (
-          <>
-            <h2 className="h2">Unable to Confirm Email</h2>
-            <p className="auth-help">
-              This confirmation link is invalid, expired, or already used. Try
-              logging in or request a new confirmation email.
-            </p>
-          </>
-        )}
-
+      <div className="auth-actions auth-actions--secondary">
         <button
           type="button"
-          className="button-ghost mt-2"
+          className="button-ghost auth-text-action"
           onClick={() => navigate("/")}
         >
           Back to login
         </button>
       </div>
-    </div>
+    </AuthShell>
   );
 }

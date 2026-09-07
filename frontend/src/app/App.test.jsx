@@ -134,11 +134,17 @@ describe('application routes and shell', () => {
     expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument()
   })
 
-  it('marks the current destination in desktop and mobile navigation', () => {
+  it.each([
+    ['/overview', 'Home'], ['/transactions', 'Activity'], ['/analytics', 'Insights'],
+  ])('uses the same customer label in both navigation surfaces and the pagebar for %s', (path, label) => {
     localStorage.setItem('token', 'jwt-value')
-    renderAt('/transactions')
-    expect(within(screen.getByRole('navigation', { name: 'Primary navigation' })).getByRole('link', { name: /Transactions/ })).toHaveAttribute('aria-current', 'page')
-    expect(within(screen.getByRole('navigation', { name: 'Mobile navigation' })).getByRole('link', { name: 'Activity' })).toHaveAttribute('aria-current', 'page')
+    renderAt(path)
+    for (const name of ['Primary navigation', 'Mobile navigation']) {
+      const link = within(screen.getByRole('navigation', { name })).getByRole('link', { name: new RegExp(label) })
+      expect(link).toHaveAttribute('href', path)
+      expect(link).toHaveAttribute('aria-current', 'page')
+    }
+    expect(within(screen.getByRole('banner')).getByText(label)).toBeVisible()
   })
 
   it('provides a keyboard skip link to the main content', () => {

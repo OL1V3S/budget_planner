@@ -1,7 +1,8 @@
 import { useId, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Eye, EyeOff } from "lucide-react";
 import { authApi } from "../../../shared/api/authApi";
+import AuthShell from "./AuthShell";
+import PasswordField from "./PasswordField";
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -10,6 +11,7 @@ export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState("info");
   const passwordId = useId();
 
   const email = searchParams.get("email");
@@ -25,53 +27,50 @@ export default function ResetPasswordPage() {
         newPassword: password,
       });
 
+      setMessageTone("success");
       setMessage("Password reset successful. You can now log in.");
     } catch {
+      setMessageTone("danger");
       setMessage("Error resetting password.");
     }
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <h1>ordo</h1>
-        <h2 className="h2">Reset Password</h2>
+    <AuthShell title="Reset password">
+      <form onSubmit={handleSubmit} className="auth-form">
+        <PasswordField
+          id={passwordId}
+          label="New password"
+          placeholder="New password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          isRevealed={showPassword}
+          onToggle={() => setShowPassword((previous) => !previous)}
+        />
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          <label className="sr-only" htmlFor={passwordId}>New password</label>
-          <div className="password-field">
-            <input
-              id={passwordId}
-              type={showPassword ? "text" : "password"}
-              placeholder="New password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+        <button type="submit" className="auth-primary-action">
+          Reset Password
+        </button>
+      </form>
 
-            <button
-              type="button"
-              className="password-toggle"
-              aria-label={showPassword ? "Hide new password" : "Show new password"}
-              onClick={() => setShowPassword((prev) => !prev)}
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
+      {message && (
+        <p
+          className={`auth-status auth-status--${messageTone}`}
+          role={messageTone === "danger" ? "alert" : "status"}
+        >
+          {message}
+        </p>
+      )}
 
-          <button type="submit">Reset Password</button>
-        </form>
-
-        {message && <p className="auth-help">{message}</p>}
-
+      <div className="auth-actions auth-actions--secondary">
         <button
           type="button"
-          className="button-ghost"
+          className="button-ghost auth-text-action"
           onClick={() => navigate("/")}
         >
           Back to login
         </button>
       </div>
-    </div>
+    </AuthShell>
   );
 }

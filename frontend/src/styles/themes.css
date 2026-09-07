@@ -30,6 +30,8 @@
   --color-info: #566a7a;
   --color-info-soft: #edf2f5;
   --color-focus: #5458c9;
+  --chart-paychecks: #24776a;
+  --chart-other: #9b6525;
   --chart-spent: #5458c9;
   --chart-limit: #666873;
   --chart-text: #181a20;
@@ -72,6 +74,8 @@
   --color-info: #91aab9;
   --color-info-soft: #1b272e;
   --color-focus: #8d91ff;
+  --chart-paychecks: #69c5b1;
+  --chart-other: #e1ad69;
   --chart-spent: #8d91ff;
   --chart-limit: #a1a4ad;
   --chart-text: #f3f3f0;
@@ -115,6 +119,8 @@
     --color-info: #91aab9;
     --color-info-soft: #1b272e;
     --color-focus: #8d91ff;
+    --chart-paychecks: #69c5b1;
+    --chart-other: #e1ad69;
     --chart-spent: #8d91ff;
     --chart-limit: #a1a4ad;
     --chart-text: #f3f3f0;

@@ -171,6 +171,77 @@ authorize production application. Down removes occurrence links before decision
 and profile tables and would destroy durable decisions. Production Down or data
 cleanup requires separate explicit authorization and a retention/export decision.
 
+## Historical cash-flow analytics
+
+The [owner-approved issue #126 plan](https://github.com/OL1V3S/ordo/issues/126#issuecomment-5562641437)
+defines historical cash flow for the single tracked checking account:
+
+| Quantity | Meaning |
+| --- | --- |
+| Recorded cash in | Every owner-scoped `AccountInflow` in the period, once per stored ID |
+| Confirmed paychecks | The cash-in subset currently linked by `PaycheckOccurrence` to an owner-confirmed profile |
+| Other cash in | All remaining recorded inflows, exactly cash in minus the linked subset |
+| Spent | Every recorded Expense in the period |
+| Net recorded cash flow | Recorded cash in minus Spent; negative results are preserved |
+
+The two cash-in components partition both amounts and record counts. Confirming
+a paycheck changes the partition, never total cash in or net flow. Active,
+paused, and ended profiles contribute their linked evidence identically. Other
+cash in means not currently linked; it can contain an actual paycheck. It is
+not a non-paycheck-income classification. Refunds, reimbursements, transfers,
+and other recorded credits count as received cash without acquiring income
+meaning. A refund does not erase or reduce an Expense/category total.
+
+Manual and saved imported inflows count identically. Unsaved previews, manual
+expectations, candidate/projection amounts, budget limits, and future
+commitments add no money to historical totals. A candidate or dismissed
+candidate's saved inflows already count as other cash in. Later matching
+deposits count as cash in but do not automatically gain occurrence links.
+Distinct saved records remain distinct even when description/date/amount match;
+analytics introduces no economic-transaction deduplication.
+
+Use each surviving record's current amount and posted calendar date, not an
+expectation, slot anchor, or link timestamp. Edits can change historical totals
+or move a record between months. A retained linked edit remains in the paycheck
+subset, with its existing edited-evidence flag available in secondary detail.
+Deletion removes the contribution; profile lifecycle/expectation changes do not
+rewrite observed cash. These are current recorded observations, not immutable
+historical ledger snapshots.
+
+The UI supplies one browser-local calendar `throughDate` per request. This is
+an explicit read filter, not a timestamp or the paycheck projector's UTC
+evaluation date. A selected month spans its first date through the earlier of
+its last date and `throughDate`, inclusive. A selected month after the cutoff
+month is invalid. The trend contains six consecutive months ending with the
+selection, including empty buckets; at the calendar floor it begins at
+`0001-01`. Month discovery includes all inflow and Expense months through the
+cutoff plus the cutoff's month. Calendar values never undergo timezone shifts.
+
+Amounts cross the cash-flow API as canonical integer-cent strings, with a minus
+sign only for negative net flow. Exact arithmetic preserves the existing full
+monetary range and aggregate values; no lower ceiling is introduced. Only chart
+geometry may use approximate JavaScript numbers. Percentage spent is
+`100 * spent / cashIn`; cash-in shares use cash in as denominator, and Expense
+category shares use Spent. A zero denominator means not applicable. Percentages
+round to the nearest tenth with exact halfway values rounded upward; values
+above 100% are not capped. Rounded shares may not sum to exactly 100.0%.
+
+The authenticated read-only endpoint
+`GET /api/analytics/cash-flow?month=YYYY-MM&throughDate=YYYY-MM-DD` uses one
+repeatable-read, read-only PostgreSQL snapshot for amounts, membership, counts,
+categories, and available-month metadata. Ownership is checked across every
+source and membership relationship. The response excludes raw descriptions,
+authoritative owner IDs, import provenance, and projections. Invalid calendar
+filters return privacy-safe `400` ProblemDetails.
+
+The primary labels are Recorded cash in, Spent, and Net recorded cash flow.
+Coverage, record counts, and the precise paycheck-subset meaning belong in
+secondary disclosure. Zero recorded sums mean no cash in/spending recorded;
+neither zero nor positive sums prove complete account activity. Net flow is not
+current/available balance, savings, or safe-to-spend capacity. Paycheck cycles,
+expense-to-paycheck allocation, reconciliation, forecasts, and Safe-to-Spend
+remain deferred. This read model introduces no schema or migration.
+
 ## Description invariant
 
 An expense description is required. At the authoritative write boundary it is

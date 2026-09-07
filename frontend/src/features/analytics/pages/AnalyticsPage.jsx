@@ -3,7 +3,10 @@ import { Link } from "react-router-dom";
 import { useBudgetLimits } from "../../budgetLimits/hooks/useBudgetLimits";
 import { useExpenses } from "../../expenses/hooks/useExpenses";
 import { formatExpenseDate } from "../../expenses/utils/calendarDate";
-import { getMonthYear } from "../../../shared/utils/monthYear";
+import { useCashFlow } from "../hooks/useCashFlow";
+import CashFlowSummary from "../components/CashFlowSummary";
+import CashFlowTrendChart from "../components/CashFlowTrendChart";
+import { barWidth, cashMonthLabel, cashPercentage, formatCash, localThroughDate, minorUnits } from "../utils/cashFlowPresentation";
 import { displayText } from "../../../utils/text";
 import Card from "../../../shared/ui/Card";
 import FormField from "../../../shared/ui/FormField";
@@ -12,7 +15,6 @@ import {
   buildBudgetStatuses,
   buildMonthlySpendingInsights,
   formatMonthLabel,
-  getAvailableMonths,
 } from "../utils/monthlySpendingInsights";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -24,7 +26,8 @@ function formatPercentage(value, { signed = false } = {}) {
 }
 
 export default function AnalyticsPage() {
-  const [selectedMonth, setSelectedMonth] = useState(getMonthYear(new Date()));
+  const [selectedMonth, setSelectedMonth] = useState(() => localThroughDate().slice(0, 7));
+  const cashFlow = useCashFlow(selectedMonth);
   const {
     expenses, loading: expensesLoading, error: expensesError, refresh: refreshExpenses,
   } = useExpenses();
@@ -32,7 +35,11 @@ export default function AnalyticsPage() {
     budgetLimits, loading: limitsLoading, error: limitsError, refresh: refreshLimits,
   } = useBudgetLimits(selectedMonth);
 
-  const availableMonths = useMemo(() => getAvailableMonths(expenses), [expenses]);
+  const availableMonths = [...new Set([localThroughDate().slice(0, 7), selectedMonth, ...cashFlow.availableMonths])].sort().reverse();
+  const categories = useMemo(() => [...(cashFlow.data?.categories ?? [])].sort((left, right) => {
+    const difference = minorUnits(right.amountMinor) - minorUnits(left.amountMinor);
+    return difference > 0n ? 1 : difference < 0n ? -1 : left.category.localeCompare(right.category, "en");
+  }), [cashFlow.data]);
   const insights = useMemo(
     () => buildMonthlySpendingInsights(expenses, selectedMonth),
     [expenses, selectedMonth]
@@ -54,15 +61,15 @@ export default function AnalyticsPage() {
     <div className="container analytics-page">
       <header className="page-header analytics-page__header">
         <div>
-          <p className="page-header__eyebrow">Understand your spending</p>
+          <p className="page-header__eyebrow">Understand your cash flow</p>
           <h1>Analytics</h1>
-          <p className="muted">See what happened with your recorded spending, month by month.</p>
+          <p className="muted">See recorded cash in and spending, month by month.</p>
         </div>
         <FormField label="Month">
           {(id) => (
             <select id={id} value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
               {availableMonths.map((month) => (
-                <option key={month} value={month}>{formatMonthLabel(month)}</option>
+                <option key={month} value={month}>{cashMonthLabel(month)}</option>
               ))}
             </select>
           )}
@@ -77,42 +84,51 @@ export default function AnalyticsPage() {
         </Card>
       ) : null}
 
-      {!expensesLoading && !expensesError ? (
-        <>
-          <Card as="section" className="analytics-total" aria-labelledby="monthly-total-heading">
-            <p className="analytics-kicker">{formatMonthLabel(selectedMonth)}</p>
-            <h2 id="monthly-total-heading" className="h2">Monthly recorded spending</h2>
-            <p className="analytics-total__value">{currencyFormatter.format(insights.total)}</p>
-            <p className="muted">Total of recorded Expenses for the selected calendar month.</p>
-          </Card>
-
-          <div className="analytics-grid">
-            <Card as="section" className="analytics-panel" aria-labelledby="category-breakdown-heading">
+      <section className="cash-flow-region" aria-label="Recorded cash flow" aria-busy={cashFlow.loading}>
+        {cashFlow.loading ? <StatusMessage>Loading recorded cash flow...</StatusMessage> : null}
+        {!cashFlow.loading && cashFlow.error ? (
+          <div className="card analytics-panel">
+            <StatusMessage tone="danger">{cashFlow.error}</StatusMessage>
+            <button type="button" onClick={cashFlow.refresh}>Retry cash flow</button>
+          </div>
+        ) : null}
+        {!cashFlow.loading && cashFlow.data ? (
+          <>
+            <CashFlowSummary data={cashFlow.data} />
+            <section className="card analytics-panel cash-flow-categories" aria-labelledby="category-breakdown-heading">
               <div className="analytics-panel__header">
                 <div>
                   <p className="analytics-kicker">Ranked by amount</p>
-                  <h2 id="category-breakdown-heading" className="h2">Where the money went</h2>
+                  <h2 id="category-breakdown-heading" className="h2">Where it went</h2>
                 </div>
               </div>
-              {insights.categories.length === 0 ? (
-                <StatusMessage>No recorded spending for this month.</StatusMessage>
+              {categories.length === 0 ? (
+                <StatusMessage>No spending recorded</StatusMessage>
               ) : (
                 <ol className="analytics-list analytics-category-list">
-                  {insights.categories.map((category) => (
+                  {categories.map((category) => (
                     <li key={category.category} className="analytics-list__item">
                       <div className="analytics-row">
                         <strong>{displayText(category.category)}</strong>
-                        <span>{currencyFormatter.format(category.amount)} · {formatPercentage(category.percentage)}</span>
+                        <span>{formatCash(category.amountMinor)} · {cashPercentage(category.amountMinor, cashFlow.data.selected.spentMinor) ?? "Not applicable"}</span>
                       </div>
                       <div className="analytics-bar" aria-hidden="true">
-                        <span style={{ width: `${Math.max(0, Math.min(category.percentage ?? 0, 100))}%` }} />
+                        <span style={{ width: barWidth(category.amountMinor, cashFlow.data.selected.spentMinor) }} />
                       </div>
                     </li>
                   ))}
                 </ol>
               )}
-            </Card>
+            </section>
+            <CashFlowTrendChart data={cashFlow.data} />
+            <button type="button" className="cash-flow-refresh" onClick={cashFlow.refresh}>Refresh cash flow</button>
+          </>
+        ) : null}
+      </section>
 
+      {!expensesLoading && !expensesError ? (
+        <>
+          <div className="analytics-grid">
             <Card as="section" className="analytics-panel" aria-labelledby="budget-status-heading">
               <div className="analytics-panel__header">
                 <div>

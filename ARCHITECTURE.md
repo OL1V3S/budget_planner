@@ -46,6 +46,14 @@ Desktop retains individual destinations. Home preserves the recorded-spending
 summary and offers direct links to the planning features. Theme tokens also
 drive chart presentation in explicit and system appearance modes.
 
+Analytics combines historical cash in and Expenses through an analytics-local
+read API and session-aware snapshot hook. The selected-month comparison and
+six-month trend show all recorded inflows, with confirmed-paycheck-linked and
+other inflows as an exact partition. Exact cent strings are formatted with
+integer arithmetic; approximate numbers are used only for chart geometry.
+Accessible text and disclosures accompany the graphs. Existing spending/budget
+drilldowns retain their separate read boundaries and behavior.
+
 Feature UI and hooks depend on feature or shared API modules. Shared modules
 must not depend on feature-specific UI. The Axios client is the common API
 transport and attaches the current bearer token to requests. A shared session
@@ -103,6 +111,16 @@ display name, and lifecycle are explicitly editable. The Paychecks frontend
 consumes these contracts without changing their semantics. Paycheck change
 detection is not included. See the paycheck section of
 [`docs/financial-domain-invariants.md`](docs/financial-domain-invariants.md).
+
+`backend/Analytics/` owns the historical cash-flow read model and pure exact-cent
+aggregation. The authenticated `/api/analytics/cash-flow` endpoint reads owner
+Expenses, AccountInflows, and owner-consistent paycheck evidence membership in
+one read-only repeatable-read PostgreSQL snapshot. It returns selected-month
+totals/categories, explicit monthly trend buckets, record counts, and available
+months, with monetary amounts encoded as integer-cent strings. It does not
+invoke candidate detection or projection, write financial data, or introduce
+new persistence. Current recorded dates and amounts govern history; the explicit
+date-only cutoff preserves the Analytics browser-local calendar convention.
 
 ### Authentication and ownership boundaries
 

@@ -35,11 +35,13 @@ silently treating every detected pattern as a financial fact.
   expectations, and manage active, paused, or ended commitments. Change reviews
   surface supported amount or timing changes and payments not seen recently;
   accepting a change remains your decision.
-- **Paychecks:** Review possible recurring deposit patterns or create an expected
-  paycheck profile manually. Profiles support several pay schedules, fixed
-  amounts or accepted ranges, and active, paused, or ended status. Active profiles
-  can show the next expected payment window. These are expectations, not
-  guaranteed deposits or employer-verified earnings.
+- **Paychecks:** See active saved expectations first, with expected amounts and
+  the next available payment window, then review possible recurring deposits.
+  Add a paycheck manually or manage existing profiles; paused, ended, and
+  dismissed items sit in expandable groups. Card Details reveal linked records
+  and schedule information. Profiles support several pay schedules and fixed
+  amounts or accepted ranges. These are expectations, not guaranteed deposits
+  or employer-verified earnings.
 - **Insights / Analytics:** Compare recorded cash in with spending for a selected
   month and see the difference as net recorded cash flow. Explore a six-month
   trend and ranked spending categories, with budget usage, month-over-month

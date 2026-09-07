@@ -24,9 +24,10 @@ silently treating every detected pattern as a financial fact.
   recorded cash flow. See expected paycheck windows, category limits at or above
   90% used, active commitments, and recent spending, with links to each workflow.
   Each section shows its own loading or retry state when a read is unavailable.
-- **Activity / Transactions:** Add, edit, and delete expenses. Search descriptions
-  and categories, filter by category or date range, and review the underlying
-  records behind spending summaries.
+- **Activity / Transactions:** Scan recorded spending first, search descriptions
+  and categories, and expand date/category filters when needed. Open Add expense
+  or Import statement to start a task; edit and delete remain available on each
+  record. Active drafts and import review stay visible while you work.
 - **Budgets:** Set monthly spending limits for default or custom categories,
   adjust or remove them, and compare recorded spending with each limit and its
   percentage used.
@@ -50,7 +51,8 @@ silently treating every detected pattern as a financial fact.
   category changes, and largest expenses available under More spending detail.
   Cash in is split into amounts linked to confirmed
   paychecks and all other recorded inflows.
-- **Statement import:** Upload a supported, text-extractable Sunflower Bank PDF,
+- **Statement import:** Open import from Activity and upload a supported,
+  text-extractable Sunflower Bank PDF,
   review parsed rows, edit eligible expense rows, inspect possible-duplicate
   warnings, and confirm the rows to save. Selected debits become expenses.
   Credits are optional and must be explicitly selected; they become inflow

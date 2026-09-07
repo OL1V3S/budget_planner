@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { DEFAULT_CATEGORIES } from "../../../shared/constants/categories";
 import { displayText } from "../../../utils/text";
 import { formatExpenseDate } from "../utils/calendarDate";
@@ -11,14 +12,24 @@ export default function ExpenseItem({
   onSave,
   onCancel,
   onDelete,
+  busy = false,
+  taskLocked = false,
+  readUnavailable = false,
 }) {
   const selectedCategory = editingData.category || "";
+  const descriptionInputRef = useRef(null);
+
+  useEffect(() => {
+    if (isEditing) descriptionInputRef.current?.focus();
+  }, [isEditing]);
 
   return (
-    <tr>
-      <td>
+    <tr className={`expense-row${isEditing ? " expense-row--editing" : ""}`}>
+      <td className="expense-cell expense-cell--description" data-label="Description">
         {isEditing ? (
           <input
+            ref={descriptionInputRef}
+            disabled={busy}
             aria-label="Edit description"
             value={editingData.description || ""}
             onChange={(e) =>
@@ -33,9 +44,10 @@ export default function ExpenseItem({
         )}
       </td>
 
-      <td>
+      <td className="expense-cell expense-cell--amount" data-label="Amount ($)">
         {isEditing ? (
           <input
+            disabled={busy}
             aria-label="Edit amount"
             type="number"
             value={editingData.amount || ""}
@@ -53,9 +65,10 @@ export default function ExpenseItem({
         )}
       </td>
 
-      <td>
+      <td className="expense-cell expense-cell--date" data-label="Date">
         {isEditing ? (
           <input
+            disabled={busy}
             aria-label="Edit date"
             type="date"
             value={editingData.date || ""}
@@ -71,11 +84,12 @@ export default function ExpenseItem({
         )}
       </td>
 
-      <td>
+      <td className="expense-cell expense-cell--category" data-label="Category">
         {isEditing ? (
           <>
             <select
-              aria-label="Edit category"
+              disabled={busy}
+            aria-label="Edit category"
               value={selectedCategory}
               onChange={(e) =>
                 setEditingData((prev) => ({
@@ -95,7 +109,8 @@ export default function ExpenseItem({
 
             {selectedCategory === "other" && (
               <input
-                aria-label="Edit custom category"
+                disabled={busy}
+            aria-label="Edit custom category"
                 type="text"
                 placeholder="Custom Category"
                 value={editingData.customCategory || ""}
@@ -113,18 +128,29 @@ export default function ExpenseItem({
         )}
       </td>
 
-      <td>
+      <td className="expense-cell expense-cell--actions" data-label="Actions">
         {isEditing ? (
           <div className="inline-actions">
-            <button onClick={() => onSave(expense.id)}>Save</button>
-            <button className="button-ghost" onClick={onCancel}>
+            <button type="button" onClick={() => onSave(expense.id)} disabled={busy || readUnavailable}>Save</button>
+            <button type="button" className="button-ghost" onClick={onCancel} disabled={busy}>
               Cancel
             </button>
           </div>
         ) : (
           <div className="inline-actions">
-            <button onClick={() => onStartEdit(expense)}>Edit</button>
-            <button className="button-danger" onClick={() => onDelete(expense.id)}>
+            <button
+              type="button"
+              onClick={(event) => onStartEdit(expense, event.currentTarget)}
+              disabled={busy || taskLocked || readUnavailable}
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              className="button-danger"
+              onClick={() => onDelete(expense.id)}
+              disabled={busy || taskLocked || readUnavailable}
+            >
               Delete
             </button>
           </div>

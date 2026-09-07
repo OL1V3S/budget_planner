@@ -33,6 +33,10 @@ function formatConfirmationTime(value) {
   return Number.isNaN(date.getTime()) ? "an unavailable time" : date.toLocaleString();
 }
 
+function formatSelectionCounts(expenseCount, inflowCount) {
+  return `${expenseCount} ${expenseCount === 1 ? "expense" : "expenses"} and ${inflowCount} ${inflowCount === 1 ? "incoming deposit" : "incoming deposits"}`;
+}
+
 function issueTitle(code) {
   if (code === "duplicate_review_required") return "Review new duplicate warnings";
   if (code === "preview_expired") return "Preview expired";
@@ -235,19 +239,23 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
     }
   }
 
+  const selectedExpenseCount = preview?.rows.filter((row) => row.isEligible && row.selectedForImport).length ?? 0;
+  const selectedInflowCount = preview?.rows.filter((row) => row.isInflowEligible && row.selectedForInflow).length ?? 0;
+  const selectedItemsLabel = formatSelectionCounts(selectedExpenseCount, selectedInflowCount);
+
   function confirmationGuidance() {
     if (confirmationNeedsRefresh) return "Refresh this page to load the authoritative duplicate review before confirming.";
     if (hasPendingRows) return "Wait for every row update to finish before confirming.";
     if (hasDirtyRows) return "Save every row with unsaved changes before confirming.";
     if (selectedCount === 0) return "Select at least one eligible row to import.";
-    return `${selectedCount} selected ${selectedCount === 1 ? "row is" : "rows are"} ready to confirm.`;
+    return "Review the selected records, then save them together.";
   }
 
   function confirmationCodesFor(rowId) {
     return confirmationIssue?.rows.find((row) => row.rowId === rowId)?.codes ?? [];
   }
 
-  function renderRow(row, presentation) {
+  function renderRow(row) {
     return (
       <ImportPreviewRow
         key={row.rowId}
@@ -255,7 +263,6 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
         draft={draftFor(row)}
         confirmationCodes={confirmationCodesFor(row.rowId)}
         disabled={confirming || confirmationNeedsRefresh}
-        presentation={presentation}
         onDraftChange={(changes) => changeDraft(row, changes)}
         onSave={() => saveRow(row)}
         onSelectionChange={(selected) => updateSelection(row, selected)}
@@ -264,7 +271,7 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
   }
 
   return (
-    <Card as="section" className="section import-preview" aria-labelledby="import-preview-title">
+    <Card as="section" className="section import-preview">
       <div className="section__header import-preview__header">
         <div>
           <p className="page-header__eyebrow">
@@ -277,7 +284,7 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
           <button
             type="button"
             className="button-ghost"
-            disabled={confirming || hasPendingRows}
+            disabled={confirming || hasPendingRows || hasDirtyRows}
             onClick={clearForReupload}
           >
             Choose another statement
@@ -367,10 +374,13 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
         <div className="import-results">
           <div className="import-results__summary">
             <div>
-              <h3 className="h3" ref={resultsHeading} tabIndex="-1">Statement preview</h3>
+              <h3 className="h3" ref={resultsHeading} tabIndex="-1">Review statement</h3>
               <p className="muted">{preview.rows.length} rows · available until {new Date(preview.expiresAt).toLocaleString()}</p>
             </div>
             <div className="import-confirmation-actions">
+              <p className="import-confirmation-actions__selection">
+                <strong>{selectedItemsLabel}</strong> selected to save.
+              </p>
               <p id="import-confirmation-guidance" className="muted" role="status" aria-live="polite">
                 {confirmationGuidance()}
               </p>
@@ -382,22 +392,17 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
                 onClick={handleConfirm}
               >
                 {confirming
-                  ? "Confirming selected rows…"
-                  : selectedCount > 0
-                    ? `Confirm ${selectedCount} selected ${selectedCount === 1 ? "row" : "rows"}`
-                    : "Confirm selected rows"}
+                  ? `Saving ${selectedItemsLabel}…`
+                  : `Save ${selectedItemsLabel}`}
               </button>
             </div>
           </div>
           <div className="table-wrapper import-preview-table" role="region" aria-label="Statement import preview" tabIndex="0">
             <table className="data-table">
               <caption>Sunflower Bank statement rows</caption>
-              <thead><tr><th>Row</th><th>Statement details</th><th>Status</th><th>Selection</th><th>Expense fields</th></tr></thead>
-              <tbody>{preview.rows.map((row) => renderRow(row, "table"))}</tbody>
+              <thead><tr><th>Transaction</th><th>Status</th><th>Selection</th><th>Expense fields</th></tr></thead>
+              <tbody>{preview.rows.map((row) => renderRow(row))}</tbody>
             </table>
-          </div>
-          <div className="import-preview-cards">
-            {preview.rows.map((row) => renderRow(row, "card"))}
           </div>
         </div>
       )}

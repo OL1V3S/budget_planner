@@ -102,3 +102,37 @@ describe('expense refresh behavior', () => {
     expect(expensesApi.getAll).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('expense write outcomes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    expensesApi.getAll.mockResolvedValue({ data: [] })
+  })
+
+  it.each([
+    ['addExpense', 'create', [{ description: 'synthetic', amount: 2, date: '2026-09-01', category: 'food' }]],
+    ['updateExpense', 'update', [1, { id: 1, description: 'synthetic' }]],
+    ['deleteExpense', 'remove', [1]],
+  ])('reports a completed %s when the subsequent list refresh fails', async (method, apiMethod, args) => {
+    const { result } = renderHook(() => useExpenses())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expensesApi[apiMethod].mockResolvedValue({})
+    const readError = new Error('read unavailable')
+    expensesApi.getAll.mockRejectedValueOnce(readError)
+    let outcome
+    await act(async () => { outcome = await result.current[method](...args) })
+    expect(outcome).toEqual({ refreshFailed: true })
+    expect(result.current.error).toBe(readError)
+    expect(expensesApi[apiMethod]).toHaveBeenCalledTimes(1)
+    expect(expensesApi[apiMethod]).toHaveBeenCalledWith(...args)
+  })
+
+  it('does not report success or refresh when the write itself fails', async () => {
+    const { result } = renderHook(() => useExpenses())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    const writeError = new Error('write unavailable')
+    expensesApi.create.mockRejectedValueOnce(writeError)
+    await act(async () => { await expect(result.current.addExpense({})).rejects.toBe(writeError) })
+    expect(expensesApi.getAll).toHaveBeenCalledTimes(1)
+  })
+})

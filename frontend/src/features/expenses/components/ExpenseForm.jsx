@@ -16,12 +16,18 @@ export default function ExpenseForm({
   setNewCategory,
   customCategory,
   setCustomCategory,
+  onCancel,
+  inputRef,
+  pending = false,
 }) {
   return (
     <Card as="section" className="section">
-      <h2 className="h2">Add Entry</h2>
+      <h2 className="h2">Add expense</h2>
+      <fieldset className="activity-form-fields" disabled={pending}>
+      <legend className="sr-only">New expense</legend>
       <div className="form-grid">
         <FormField label="Description">{(id) => <input id={id}
+          ref={inputRef}
           placeholder="Description"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
@@ -63,9 +69,13 @@ export default function ExpenseForm({
           />}</FormField>
         )}
 
-        <button onClick={onAdd} disabled={loading}>
-          Add
+      </div>
+      </fieldset>
+      <div className="inline-actions activity-task-actions">
+        <button type="button" onClick={onAdd} disabled={loading || pending}>
+          {pending ? "Saving…" : "Save expense"}
         </button>
+        <button type="button" className="button-ghost" onClick={onCancel} disabled={pending}>Cancel</button>
       </div>
     </Card>
   );

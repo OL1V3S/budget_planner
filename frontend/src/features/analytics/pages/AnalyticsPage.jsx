@@ -5,10 +5,10 @@ import { useExpenses } from "../../expenses/hooks/useExpenses";
 import { formatExpenseDate } from "../../expenses/utils/calendarDate";
 import { useCashFlow } from "../hooks/useCashFlow";
 import CashFlowSummary from "../components/CashFlowSummary";
+import CashFlowCategories from "../components/CashFlowCategories";
 import CashFlowTrendChart from "../components/CashFlowTrendChart";
-import { barWidth, cashMonthLabel, cashPercentage, formatCash, localThroughDate, minorUnits } from "../utils/cashFlowPresentation";
+import { cashMonthLabel, localThroughDate } from "../utils/cashFlowPresentation";
 import { displayText } from "../../../utils/text";
-import Card from "../../../shared/ui/Card";
 import FormField from "../../../shared/ui/FormField";
 import StatusMessage from "../../../shared/ui/StatusMessage";
 import {
@@ -36,10 +36,6 @@ export default function AnalyticsPage() {
   } = useBudgetLimits(selectedMonth);
 
   const availableMonths = [...new Set([localThroughDate().slice(0, 7), selectedMonth, ...cashFlow.availableMonths])].sort().reverse();
-  const categories = useMemo(() => [...(cashFlow.data?.categories ?? [])].sort((left, right) => {
-    const difference = minorUnits(right.amountMinor) - minorUnits(left.amountMinor);
-    return difference > 0n ? 1 : difference < 0n ? -1 : left.category.localeCompare(right.category, "en");
-  }), [cashFlow.data]);
   const insights = useMemo(
     () => buildMonthlySpendingInsights(expenses, selectedMonth),
     [expenses, selectedMonth]
@@ -61,28 +57,24 @@ export default function AnalyticsPage() {
     <div className="container analytics-page">
       <header className="page-header analytics-page__header">
         <div>
-          <p className="page-header__eyebrow">Understand your cash flow</p>
-          <h1>Analytics</h1>
+          <h1>Insights</h1>
           <p className="muted">See recorded cash in and spending, month by month.</p>
         </div>
-        <FormField label="Month">
-          {(id) => (
-            <select id={id} value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
-              {availableMonths.map((month) => (
-                <option key={month} value={month}>{cashMonthLabel(month)}</option>
-              ))}
-            </select>
-          )}
-        </FormField>
+        <div className="analytics-page__controls">
+          <FormField label="Month">
+            {(id) => (
+              <select id={id} value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
+                {availableMonths.map((month) => (
+                  <option key={month} value={month}>{cashMonthLabel(month)}</option>
+                ))}
+              </select>
+            )}
+          </FormField>
+          {!cashFlow.loading && cashFlow.data ? (
+            <button type="button" className="button-ghost" onClick={cashFlow.refresh}>Refresh cash flow</button>
+          ) : null}
+        </div>
       </header>
-
-      {expensesLoading ? <StatusMessage>Loading spending insights...</StatusMessage> : null}
-      {!expensesLoading && expensesError ? (
-        <Card as="section" className="section">
-          <StatusMessage tone="danger">We couldn’t load recorded expenses.</StatusMessage>
-          <button type="button" onClick={retryExpenses}>Try again</button>
-        </Card>
-      ) : null}
 
       <section className="cash-flow-region" aria-label="Recorded cash flow" aria-busy={cashFlow.loading}>
         {cashFlow.loading ? <StatusMessage>Loading recorded cash flow...</StatusMessage> : null}
@@ -95,48 +87,62 @@ export default function AnalyticsPage() {
         {!cashFlow.loading && cashFlow.data ? (
           <>
             <CashFlowSummary data={cashFlow.data} />
-            <section className="card analytics-panel cash-flow-categories" aria-labelledby="category-breakdown-heading">
-              <div className="analytics-panel__header">
-                <div>
-                  <p className="analytics-kicker">Ranked by amount</p>
-                  <h2 id="category-breakdown-heading" className="h2">Where it went</h2>
-                </div>
-              </div>
-              {categories.length === 0 ? (
-                <StatusMessage>No spending recorded</StatusMessage>
-              ) : (
-                <ol className="analytics-list analytics-category-list">
-                  {categories.map((category) => (
-                    <li key={category.category} className="analytics-list__item">
-                      <div className="analytics-row">
-                        <strong>{displayText(category.category)}</strong>
-                        <span>{formatCash(category.amountMinor)} · {cashPercentage(category.amountMinor, cashFlow.data.selected.spentMinor) ?? "Not applicable"}</span>
-                      </div>
-                      <div className="analytics-bar" aria-hidden="true">
-                        <span style={{ width: barWidth(category.amountMinor, cashFlow.data.selected.spentMinor) }} />
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </section>
-            <CashFlowTrendChart data={cashFlow.data} />
-            <button type="button" className="cash-flow-refresh" onClick={cashFlow.refresh}>Refresh cash flow</button>
+            <div className="cash-flow-visuals">
+              <CashFlowCategories data={cashFlow.data} />
+              <CashFlowTrendChart data={cashFlow.data} />
+            </div>
           </>
         ) : null}
       </section>
 
-      {!expensesLoading && !expensesError ? (
-        <>
-          <div className="analytics-grid">
-            <Card as="section" className="analytics-panel" aria-labelledby="budget-status-heading">
-              <div className="analytics-panel__header">
-                <div>
-                  <p className="analytics-kicker">Configured limits</p>
-                  <h2 id="budget-status-heading" className="h2">Budget status by category</h2>
+      <section className="analytics-more" aria-labelledby="more-spending-heading">
+        <header className="analytics-more__header">
+          <h2 id="more-spending-heading" className="h2">More spending detail</h2>
+        </header>
+        {expensesLoading ? <StatusMessage>Loading spending insights...</StatusMessage> : null}
+        {!expensesLoading && expensesError ? (
+          <div className="analytics-load-state">
+            <StatusMessage tone="danger">We couldn’t load recorded expenses.</StatusMessage>
+            <button type="button" onClick={retryExpenses}>Try again</button>
+          </div>
+        ) : null}
+
+        {!expensesLoading && !expensesError ? (
+          <div className="analytics-details">
+            <section className="analytics-detail" aria-labelledby="budget-status-heading">
+              <details>
+                <summary><h3 id="budget-status-heading">Budget status by category</h3></summary>
+                <div className="analytics-detail__content">
+                  <div className="analytics-panel__header">
+                    <div>
+                      <p className="analytics-kicker">Configured limits</p>
+                    </div>
+                    <Link to="/budgets">Manage budgets</Link>
+                  </div>
+                  {!limitsLoading && !limitsError && budgetStatuses.length === 0 ? (
+                    <StatusMessage>No budget limits are set for this month.</StatusMessage>
+                  ) : null}
+                  {!limitsLoading && !limitsError && budgetStatuses.length > 0 ? (
+                    <ul className="analytics-list">
+                      {budgetStatuses.map((budget) => (
+                        <li key={budget.id ?? budget.category} className="analytics-list__item analytics-budget-row">
+                          <div className="analytics-row">
+                            <strong>{displayText(budget.category)}</strong>
+                            <span className={`analytics-status analytics-status--${budget.status.replace(" ", "-")}`}>{displayText(budget.status)}</span>
+                          </div>
+                          <p>{currencyFormatter.format(budget.spent)} spent of {currencyFormatter.format(budget.limitAmount)}</p>
+                          <p>{budget.over !== null
+                            ? `${currencyFormatter.format(budget.over)} over`
+                            : `${currencyFormatter.format(budget.remaining)} remaining`}</p>
+                          <p>{budget.percentage === null
+                            ? "Percentage used: Not applicable for a $0 limit"
+                            : `${formatPercentage(budget.percentage)} used`}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
-                <Link to="/budgets">Manage budgets</Link>
-              </div>
+              </details>
               {limitsLoading ? <StatusMessage>Loading budget limits...</StatusMessage> : null}
               {!limitsLoading && limitsError ? (
                 <>
@@ -144,87 +150,73 @@ export default function AnalyticsPage() {
                   <button type="button" onClick={refreshLimits}>Try again</button>
                 </>
               ) : null}
-              {!limitsLoading && !limitsError && budgetStatuses.length === 0 ? (
-                <StatusMessage>No budget limits are set for this month.</StatusMessage>
-              ) : null}
-              {!limitsLoading && !limitsError && budgetStatuses.length > 0 ? (
-                <ul className="analytics-list">
-                  {budgetStatuses.map((budget) => (
-                    <li key={budget.id ?? budget.category} className="analytics-list__item analytics-budget-row">
-                      <div className="analytics-row">
-                        <strong>{displayText(budget.category)}</strong>
-                        <span className={`analytics-status analytics-status--${budget.status.replace(" ", "-")}`}>{displayText(budget.status)}</span>
+            </section>
+
+            <section className="analytics-detail" aria-labelledby="comparison-heading">
+              <details>
+                <summary><h3 id="comparison-heading">Month-over-month change</h3></summary>
+                <div className="analytics-detail__content">
+                  <p className="analytics-kicker">Compared with {formatMonthLabel(insights.previousMonth)}</p>
+                  <p className="analytics-comparison__value">
+                    {insights.comparison.difference > 0 ? "+" : ""}{currencyFormatter.format(insights.comparison.difference)}
+                  </p>
+                  {insights.comparison.previousTotal === 0 && insights.total === 0 ? (
+                    <p className="muted">Neither month has recorded spending.</p>
+                  ) : insights.comparison.percentage === null ? (
+                    <p className="muted">Percentage comparison is unavailable because the previous month had $0.00 recorded spending.</p>
+                  ) : (
+                    <p className="muted">{formatPercentage(insights.comparison.percentage, { signed: true })} from {currencyFormatter.format(insights.comparison.previousTotal)}</p>
+                  )}
+                  {insights.increases.length === 0 && insights.decreases.length === 0 ? (
+                    <StatusMessage>No category changes to show between these months.</StatusMessage>
+                  ) : (
+                    <div className="analytics-change-grid">
+                      <div>
+                        <h4>Largest increases</h4>
+                        {insights.increases.length === 0 ? <p className="muted">No increases.</p> : (
+                          <ul>{insights.increases.map((change) => <li key={change.category}>{displayText(change.category)} <strong>+{currencyFormatter.format(change.difference)}</strong></li>)}</ul>
+                        )}
                       </div>
-                      <p>{currencyFormatter.format(budget.spent)} spent of {currencyFormatter.format(budget.limitAmount)}</p>
-                      <p>{budget.over !== null
-                        ? `${currencyFormatter.format(budget.over)} over`
-                        : `${currencyFormatter.format(budget.remaining)} remaining`}</p>
-                      <p>{budget.percentage === null
-                        ? "Percentage used: Not applicable for a $0 limit"
-                        : `${formatPercentage(budget.percentage)} used`}</p>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </Card>
-
-            <Card as="section" className="analytics-panel" aria-labelledby="comparison-heading">
-              <p className="analytics-kicker">Compared with {formatMonthLabel(insights.previousMonth)}</p>
-              <h2 id="comparison-heading" className="h2">Month-over-month change</h2>
-              <p className="analytics-comparison__value">
-                {insights.comparison.difference > 0 ? "+" : ""}{currencyFormatter.format(insights.comparison.difference)}
-              </p>
-              {insights.comparison.previousTotal === 0 && insights.total === 0 ? (
-                <p className="muted">Neither month has recorded spending.</p>
-              ) : insights.comparison.percentage === null ? (
-                <p className="muted">Percentage comparison is unavailable because the previous month had $0.00 recorded spending.</p>
-              ) : (
-                <p className="muted">{formatPercentage(insights.comparison.percentage, { signed: true })} from {currencyFormatter.format(insights.comparison.previousTotal)}</p>
-              )}
-              {insights.increases.length === 0 && insights.decreases.length === 0 ? (
-                <StatusMessage>No category changes to show between these months.</StatusMessage>
-              ) : (
-                <div className="analytics-change-grid">
-                  <div>
-                    <h3>Largest increases</h3>
-                    {insights.increases.length === 0 ? <p className="muted">No increases.</p> : (
-                      <ul>{insights.increases.map((change) => <li key={change.category}>{displayText(change.category)} <strong>+{currencyFormatter.format(change.difference)}</strong></li>)}</ul>
-                    )}
-                  </div>
-                  <div>
-                    <h3>Largest decreases</h3>
-                    {insights.decreases.length === 0 ? <p className="muted">No decreases.</p> : (
-                      <ul>{insights.decreases.map((change) => <li key={change.category}>{displayText(change.category)} <strong>{currencyFormatter.format(change.difference)}</strong></li>)}</ul>
-                    )}
-                  </div>
+                      <div>
+                        <h4>Largest decreases</h4>
+                        {insights.decreases.length === 0 ? <p className="muted">No decreases.</p> : (
+                          <ul>{insights.decreases.map((change) => <li key={change.category}>{displayText(change.category)} <strong>{currencyFormatter.format(change.difference)}</strong></li>)}</ul>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </Card>
+              </details>
+            </section>
 
-            <Card as="section" className="analytics-panel" aria-labelledby="largest-expenses-heading">
-              <div className="analytics-panel__header">
-                <div>
-                  <p className="analytics-kicker">Top five</p>
-                  <h2 id="largest-expenses-heading" className="h2">Largest expenses</h2>
+            <section className="analytics-detail" aria-labelledby="largest-expenses-heading">
+              <details>
+                <summary><h3 id="largest-expenses-heading">Largest expenses</h3></summary>
+                <div className="analytics-detail__content">
+                  <div className="analytics-panel__header">
+                    <div>
+                      <p className="analytics-kicker">Top five</p>
+                    </div>
+                    <Link to="/transactions">Review transactions</Link>
+                  </div>
+                  {insights.largestExpenses.length === 0 ? (
+                    <StatusMessage>No expenses to rank for this month.</StatusMessage>
+                  ) : (
+                    <ol className="analytics-list">
+                      {insights.largestExpenses.map((expense) => (
+                        <li key={expense.id} className="analytics-list__item analytics-row">
+                          <span><strong>{expense.description}</strong><small>{displayText(expense.category)} · {formatExpenseDate(expense.date)}</small></span>
+                          <strong>{currencyFormatter.format(expense.amount)}</strong>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
                 </div>
-                <Link to="/transactions">Review transactions</Link>
-              </div>
-              {insights.largestExpenses.length === 0 ? (
-                <StatusMessage>No expenses to rank for this month.</StatusMessage>
-              ) : (
-                <ol className="analytics-list">
-                  {insights.largestExpenses.map((expense) => (
-                    <li key={expense.id} className="analytics-list__item analytics-row">
-                      <span><strong>{expense.description}</strong><small>{displayText(expense.category)} · {formatExpenseDate(expense.date)}</small></span>
-                      <strong>{currencyFormatter.format(expense.amount)}</strong>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </Card>
+              </details>
+            </section>
           </div>
-        </>
-      ) : null}
+        ) : null}
+      </section>
     </div>
   );
 }

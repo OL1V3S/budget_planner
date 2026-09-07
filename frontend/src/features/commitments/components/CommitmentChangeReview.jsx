@@ -85,26 +85,43 @@ function Comparison({ change, dimension, assessment }) {
   );
 }
 
-function ChangeActions({ change, dimension, assessment, state, kept }) {
-  const [confirmingEnd, setConfirmingEnd] = useState(false);
+function ChangeActions({ change, dimension, assessment, state, kept, activeTask, onTaskChange, onReviewedOpenChange }) {
   const endTriggerRef = useRef(null);
   const confirmEndRef = useRef(null);
   const restoreEndFocus = useRef(false);
-  const disabled = Boolean(state.busyKey);
   const name = change.commitment.name;
+  const taskKey = `${change.commitment.id}:${assessment.fingerprint}`;
+  const confirmingEnd = activeTask?.mode === "change-end" && activeTask.key === taskKey;
+  const actionDisabled = Boolean(state.busyKey || state.loading || state.loadError || activeTask);
+  const confirmationDisabled = Boolean(state.busyKey || state.loading || state.loadError);
+  const cancelDisabled = Boolean(state.busyKey || state.loading);
 
   useEffect(() => {
     if (confirmingEnd) {
       confirmEndRef.current?.focus();
     } else if (restoreEndFocus.current) {
       restoreEndFocus.current = false;
-      endTriggerRef.current?.focus();
+      const endTrigger = endTriggerRef.current;
+      if (endTrigger && !endTrigger.disabled) endTrigger.focus();
+      else document.getElementById("commitments-feedback")?.focus();
     }
   }, [confirmingEnd]);
 
-  async function run(operation, focusId) {
+  async function run(operation, focusId, openReviewed = false) {
     await operation();
-    document.getElementById(focusId)?.focus();
+    if (openReviewed) onReviewedOpenChange(true);
+    const activeAfterOperation = document.activeElement;
+    requestAnimationFrame(() => {
+      const activeNow = document.activeElement;
+      if (activeNow !== activeAfterOperation && activeNow?.isConnected && activeNow !== document.body) return;
+      const feedback = document.getElementById("commitments-feedback");
+      const hasError = feedback?.matches('[role="alert"]') || feedback?.querySelector('[role="alert"]');
+      if (hasError) feedback.focus();
+      else {
+        const target = document.getElementById(focusId);
+        (focusId === "kept-changes-heading" ? target?.closest("summary") : target)?.focus();
+      }
+    });
   }
 
   if (kept) {
@@ -112,14 +129,14 @@ function ChangeActions({ change, dimension, assessment, state, kept }) {
       <div className="inline-actions commitment-change__actions">
         <button
           type="button"
-          disabled={disabled}
+          disabled={actionDisabled}
           aria-label={`Reconsider ${dimension} change for ${name}`}
           onClick={() => run(
             () => state.reconsiderChange(change.commitment.id, dimension, assessment.fingerprint),
             "changes-review-heading"
           )}
         >
-          {disabled ? "Updating..." : "Reconsider"}
+          {state.busyKey ? "Updating..." : "Reconsider"}
         </button>
       </div>
     );
@@ -137,23 +154,23 @@ function ChangeActions({ change, dimension, assessment, state, kept }) {
             ref={confirmEndRef}
             type="button"
             className="button-danger"
-            disabled={disabled}
+            disabled={confirmationDisabled}
             aria-label={`Confirm mark ${name} ended`}
             onClick={() => run(
               () => state.markEndedFromChange(change.commitment.id, assessment.fingerprint),
               "changes-review-heading"
             )}
           >
-            {disabled ? "Marking ended..." : "Confirm mark ended"}
+            {state.busyKey ? "Marking ended..." : "Confirm mark ended"}
           </button>
           <button
             type="button"
             className="button-ghost"
-            disabled={disabled}
+            disabled={cancelDisabled}
             aria-label={`Cancel marking ${name} ended`}
             onClick={() => {
               restoreEndFocus.current = true;
-              setConfirmingEnd(false);
+              onTaskChange(null);
             }}
           >
             Cancel
@@ -168,51 +185,52 @@ function ChangeActions({ change, dimension, assessment, state, kept }) {
       {dimension === "amount" && (
         <button
           type="button"
-          disabled={disabled}
+          disabled={actionDisabled}
           aria-label={`Accept amount change for ${name}`}
           onClick={() => run(
             () => state.acceptAmountChange(change.commitment.id, assessment.fingerprint),
             "changes-review-heading"
           )}
         >
-          {disabled ? "Updating..." : "Accept change"}
+          {state.busyKey ? "Updating..." : "Accept change"}
         </button>
       )}
       {dimension === "timing" && (
         <button
           type="button"
-          disabled={disabled}
+          disabled={actionDisabled}
           aria-label={`Accept timing change for ${name}`}
           onClick={() => run(
             () => state.acceptTimingChange(change.commitment.id, assessment.fingerprint),
             "changes-review-heading"
           )}
         >
-          {disabled ? "Updating..." : "Accept change"}
+          {state.busyKey ? "Updating..." : "Accept change"}
         </button>
       )}
       <button
         type="button"
         className="button-ghost"
-        disabled={disabled}
+        disabled={actionDisabled}
         aria-label={dimension === "missing"
           ? `Keep active for ${name}`
           : `Keep current ${dimension} for ${name}`}
         onClick={() => run(
           () => state.keepChange(change.commitment.id, dimension, assessment.fingerprint),
-          "kept-changes-heading"
+          "kept-changes-heading",
+          true
         )}
       >
-        {disabled ? "Updating..." : dimension === "missing" ? "Keep active" : "Keep current"}
+        {state.busyKey ? "Updating..." : dimension === "missing" ? "Keep active" : "Keep current"}
       </button>
       {dimension === "missing" && assessment.state === "possibly_ended" && (
         <button
           ref={endTriggerRef}
           type="button"
           className="button-danger"
-          disabled={disabled}
+          disabled={actionDisabled}
           aria-label={`Mark ${name} ended`}
-          onClick={() => setConfirmingEnd(true)}
+          onClick={() => onTaskChange({ mode: "change-end", key: taskKey })}
         >
           Mark ended
         </button>
@@ -221,7 +239,7 @@ function ChangeActions({ change, dimension, assessment, state, kept }) {
   );
 }
 
-function ChangeCard({ change, state, kept }) {
+function ChangeCard({ change, state, kept, activeTask, onTaskChange, onReviewedOpenChange }) {
   return (
     <Card as="article" className={`commitment-card commitment-change-card${kept ? " commitment-change-card--kept" : ""}`}>
       <div className="commitment-card__header">
@@ -230,7 +248,6 @@ function ChangeCard({ change, state, kept }) {
           <h3>{change.commitment.name}</h3>
           <p className="muted">{change.commitment.category} · {title(change.commitment.cadence)}</p>
         </div>
-        <span className="commitment-change__evaluated">Evaluated {formatDate(state.changeEvaluatedOn)}</span>
       </div>
 
       <div className="commitment-change__panels">
@@ -248,9 +265,16 @@ function ChangeCard({ change, state, kept }) {
                 </span>
               </div>
               <Comparison change={change} dimension={dimension} assessment={assessment} />
-              {evidence.length > 0 && <CommitmentEvidence evidence={evidence} />}
-              <p className="muted commitment-change__rule">Rule version {change.algorithmVersion}</p>
-              <ChangeActions change={change} dimension={dimension} assessment={assessment} state={state} kept={kept} />
+              <details className="commitment-change__details">
+                <summary aria-label={`Details for ${dimension} change for ${change.commitment.name}`}>Details</summary>
+                {evidence.length > 0 && <CommitmentEvidence evidence={evidence} />}
+                <dl className="commitment-change__mechanics">
+                  <div><dt>Evaluated</dt><dd>{formatDate(state.changeEvaluatedOn)}</dd></div>
+                  <div><dt>Detection details</dt><dd>{change.algorithmVersion}</dd></div>
+                </dl>
+              </details>
+              <ChangeActions change={change} dimension={dimension} assessment={assessment} state={state} kept={kept}
+                activeTask={activeTask} onTaskChange={onTaskChange} onReviewedOpenChange={onReviewedOpenChange} />
             </section>
           );
         })}
@@ -259,50 +283,87 @@ function ChangeCard({ change, state, kept }) {
   );
 }
 
-function ChangeSection({ id, title: sectionTitle, description, changes, state, kept = false }) {
+function changeCount(changes) {
+  return changes.reduce((count, change) => count + change.assessments.length, 0);
+}
+
+function ChangeList({ changes, state, kept = false, activeTask, onTaskChange, onReviewedOpenChange }) {
+  if (changes.length === 0) return <p className="empty-state">{kept ? "No reviewed changes." : "No commitment changes need your review."}</p>;
   return (
-    <section className="commitment-section" aria-labelledby={id}>
+    <div className="commitment-list">
+      {changes.map((change) => (
+        <ChangeCard key={change.commitment.id} change={change} state={state} kept={kept}
+          activeTask={activeTask} onTaskChange={onTaskChange} onReviewedOpenChange={onReviewedOpenChange} />
+      ))}
+    </div>
+  );
+}
+
+function PendingChanges({ changes, state, activeTask, onTaskChange, onReviewedOpenChange }) {
+  return (
+    <section className="commitment-section" aria-labelledby="changes-review-heading">
       <div className="commitment-section__header">
         <div>
-          <h2 id={id} tabIndex="-1">{sectionTitle}</h2>
-          <p className="muted">{description}</p>
+          <h2 id="changes-review-heading" tabIndex="-1">Changes to review</h2>
+          <p className="muted">Review the latest evidence before changing an expectation or commitment status. Each decision applies only to this exact assessment.</p>
         </div>
-        <span className="commitment-count">{changes.reduce((count, change) => count + change.assessments.length, 0)}</span>
+        <span className="commitment-count">{changeCount(changes)}</span>
       </div>
-      {changes.length === 0 ? (
-        <p className="empty-state">{kept ? "No kept changes." : "No commitment changes need your review."}</p>
-      ) : (
-        <div className="commitment-list">
-          {changes.map((change) => (
-            <ChangeCard key={change.commitment.id} change={change} state={state} kept={kept} />
-          ))}
-        </div>
-      )}
+      <ChangeList changes={changes} state={state} activeTask={activeTask}
+        onTaskChange={onTaskChange} onReviewedOpenChange={onReviewedOpenChange} />
     </section>
   );
 }
 
-export default function CommitmentChangeReview({ state }) {
+function ReviewedChanges({ changes, state, activeTask, onTaskChange, open, onOpenChange, onReviewedOpenChange }) {
+  const locked = Boolean(state.busyKey?.includes(":reconsider:"));
+  return (
+    <details className="commitment-section commitment-change-history" open={open || locked}
+      onToggle={(event) => { if (!locked) onOpenChange(event.currentTarget.open); }}>
+      <summary aria-disabled={locked || undefined} onClick={(event) => { if (locked) event.preventDefault(); }}>
+        <h2 id="kept-changes-heading">Reviewed changes <span>({changeCount(changes)})</span></h2>
+      </summary>
+      <div className="commitment-change-history__content">
+        <p className="muted">These exact observations were kept without changing the saved expectation. Reconsider one if you want to review it again.</p>
+        {locked && <p className="muted">Finish reconsidering this change before closing reviewed history.</p>}
+        <ChangeList changes={changes} state={state} kept activeTask={activeTask}
+          onTaskChange={onTaskChange} onReviewedOpenChange={onReviewedOpenChange} />
+      </div>
+    </details>
+  );
+}
+
+export default function CommitmentChangeReview({
+  state,
+  view = "all",
+  activeTask: controlledActiveTask,
+  onTaskChange,
+  reviewedOpen: controlledReviewedOpen,
+  onReviewedOpenChange,
+}) {
+  const [localActiveTask, setLocalActiveTask] = useState(null);
+  const [localReviewedOpen, setLocalReviewedOpen] = useState(false);
+  const activeTask = controlledActiveTask === undefined ? localActiveTask : controlledActiveTask;
+  const changeTask = onTaskChange ?? setLocalActiveTask;
+  const reviewedOpen = controlledReviewedOpen === undefined ? localReviewedOpen : controlledReviewedOpen;
+  const changeReviewedOpen = onReviewedOpenChange ?? setLocalReviewedOpen;
   const pending = groupCommitmentChanges(state.commitmentChanges, "pending");
   const kept = groupCommitmentChanges(state.commitmentChanges, "kept");
 
+  useEffect(() => {
+    if (view === "reviewed" || activeTask?.mode !== "change-end") return;
+    const exists = pending.some((change) => change.assessments.some(({ assessment }) =>
+      `${change.commitment.id}:${assessment.fingerprint}` === activeTask.key));
+    if (!exists) changeTask(null);
+  }, [activeTask, changeTask, pending, view]);
+
   return (
     <>
-      <ChangeSection
-        id="changes-review-heading"
-        title="Changes to review"
-        description="Review the latest evidence before changing an expectation or commitment status. Each decision applies only to this exact assessment."
-        changes={pending}
-        state={state}
-      />
-      <ChangeSection
-        id="kept-changes-heading"
-        title="Kept changes"
-        description="These exact observations were kept without changing the saved expectation. Reconsider one if you want to review it again."
-        changes={kept}
-        state={state}
-        kept
-      />
+      {(view === "all" || view === "pending") && <PendingChanges changes={pending} state={state} activeTask={activeTask}
+        onTaskChange={changeTask} onReviewedOpenChange={changeReviewedOpen} />}
+      {(view === "all" || view === "reviewed") && <ReviewedChanges changes={kept} state={state} activeTask={activeTask}
+        onTaskChange={changeTask} open={reviewedOpen} onOpenChange={changeReviewedOpen}
+        onReviewedOpenChange={changeReviewedOpen} />}
     </>
   );
 }

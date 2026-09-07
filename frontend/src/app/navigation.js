@@ -11,10 +11,10 @@ import {
 } from "lucide-react";
 
 export const APP_DESTINATIONS = [
-  { to: "/overview", label: "Overview", icon: LayoutDashboard },
-  { to: "/transactions", label: "Transactions", icon: ReceiptText },
+  { to: "/overview", label: "Home", icon: LayoutDashboard },
+  { to: "/transactions", label: "Activity", icon: ReceiptText },
   { to: "/budgets", label: "Budgets", icon: BarChart3, description: "Set and review monthly category limits." },
-  { to: "/analytics", label: "Analytics", icon: ChartNoAxesCombined },
+  { to: "/analytics", label: "Insights", icon: ChartNoAxesCombined },
   { to: "/commitments", label: "Commitments", icon: Repeat2, description: "Review recurring expenses and manage saved commitments." },
   { to: "/paychecks", label: "Paychecks", icon: WalletCards, description: "Review deposits and manage saved paycheck expectations." },
   { to: "/investing", label: "Investing", icon: Landmark, description: "Unavailable today. View the planned investing workspace." },

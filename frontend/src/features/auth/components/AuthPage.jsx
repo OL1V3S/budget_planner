@@ -1,8 +1,9 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { authApi } from "../../../shared/api/authApi";
 import { establishSession } from "../../../shared/auth/session";
-import { Eye, EyeOff } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import AuthShell from "./AuthShell";
+import PasswordField from "./PasswordField";
 
 export default function AuthPage({ onLogin }) {
   const [mode, setMode] = useState("login");
@@ -13,17 +14,26 @@ export default function AuthPage({ onLogin }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [confirmationMessage, setConfirmationMessage] = useState("");
   const [resendMessage, setResendMessage] = useState("");
+  const [resendTone, setResendTone] = useState("info");
+  const [formError, setFormError] = useState(null);
   const [isResending, setIsResending] = useState(false);
   const emailId = useId();
   const passwordId = useId();
   const confirmPasswordId = useId();
+  const passwordRequirementsId = useId();
+  const formErrorRef = useRef(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (formError) formErrorRef.current?.focus();
+  }, [formError]);
 
   async function handleSubmit(e) {
     e.preventDefault();
+    setFormError(null);
 
     if (mode === "register" && password !== confirmPassword) {
-      alert("Passwords do not match.");
+      setFormError({ message: "Passwords do not match." });
       return;
     }
 
@@ -58,13 +68,15 @@ export default function AuthPage({ onLogin }) {
       }
 
       if (Array.isArray(errorData)) {
-        alert(errorData.map((e) => e.description).join("\n"));
+        setFormError({
+          message: errorData.map((error) => error.description).join("\n"),
+        });
       } else if (typeof errorData === "string") {
-        alert(errorData);
+        setFormError({ message: errorData });
       } else if (typeof errorData?.message === "string") {
-        alert(errorData.message);
+        setFormError({ message: errorData.message });
       } else {
-        alert(err.message || "Something went wrong.");
+        setFormError({ message: err.message || "Something went wrong." });
       }
     }
   }
@@ -77,8 +89,10 @@ export default function AuthPage({ onLogin }) {
 
     try {
       const response = await authApi.resendConfirmation({ email });
+      setResendTone("success");
       setResendMessage(response.data.message);
     } catch (err) {
+      setResendTone("danger");
       if (err.response?.status === 429) {
         setResendMessage("Too many requests. Please wait before trying again.");
       } else {
@@ -93,6 +107,7 @@ export default function AuthPage({ onLogin }) {
     setMode(mode === "login" ? "register" : "login");
     setConfirmationMessage("");
     setResendMessage("");
+    setFormError(null);
     setPassword("");
     setConfirmPassword("");
   }
@@ -101,46 +116,56 @@ export default function AuthPage({ onLogin }) {
     setMode("login");
     setConfirmationMessage("");
     setResendMessage("");
+    setFormError(null);
   }
 
+  if (mode === "check-email") {
+    return (
+      <AuthShell title="Check your email">
+        <p className="auth-status auth-status--info" role="status">
+          {confirmationMessage}
+        </p>
+        <p className="auth-help">
+          Confirm <strong>{email}</strong> before logging in.
+        </p>
+        {resendMessage && (
+          <p
+            className={`auth-status auth-status--${resendTone}`}
+            role={resendTone === "danger" ? "alert" : "status"}
+          >
+            {resendMessage}
+          </p>
+        )}
+        <div className="auth-actions">
+          <button
+            type="button"
+            className="auth-primary-action"
+            onClick={handleResendConfirmation}
+            disabled={!email || isResending}
+          >
+            {isResending ? "Requesting..." : "Resend confirmation email"}
+          </button>
+          <button
+            type="button"
+            className="button-ghost auth-text-action"
+            onClick={returnToLogin}
+          >
+            Back to login
+          </button>
+        </div>
+      </AuthShell>
+    );
+  }
+
+  const isLogin = mode === "login";
+
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <h1>ordo</h1>
-        {mode === "check-email" ? (
-          <>
-            <h2 className="h2">Check your email</h2>
-            <p className="auth-help">{confirmationMessage}</p>
-            <p className="auth-help mt-2">
-              Confirm <strong>{email}</strong> before logging in.
-            </p>
-
-            {resendMessage && <p className="auth-help mt-2">{resendMessage}</p>}
-
-            <button
-              type="button"
-              className="mt-2"
-              onClick={handleResendConfirmation}
-              disabled={!email || isResending}
-            >
-              {isResending ? "Requesting..." : "Resend confirmation email"}
-            </button>
-            <button
-              type="button"
-              className="button-ghost"
-              onClick={returnToLogin}
-            >
-              Back to login
-            </button>
-          </>
-        ) : (
-          <>
-            <h2 className="h2">
-              {mode === "login" ? "Log In" : "Create Account"}
-            </h2>
-
-            <form onSubmit={handleSubmit} className="auth-form">
-          <label className="sr-only" htmlFor={emailId}>Email</label>
+    <AuthShell title={isLogin ? "Log in" : "Create account"}>
+      <form onSubmit={handleSubmit} className="auth-form">
+        <div className="auth-field">
+          <label className="auth-field__label" htmlFor={emailId}>
+            Email
+          </label>
           <input
             id={emailId}
             type="email"
@@ -149,87 +174,84 @@ export default function AuthPage({ onLogin }) {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-
-        <label className="sr-only" htmlFor={passwordId}>Password</label>
-        <div className="password-field">
-        <input
-            id={passwordId}
-            type={showPassword ? "text" : "password"}
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-        />
-        <button
-            type="button"
-            className="password-toggle"
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            onClick={() => setShowPassword((prev) => !prev)}
-        >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-        </button>
         </div>
 
-        {mode === "login" && (
-            <button
+        <PasswordField
+          id={passwordId}
+          label="Password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          isRevealed={showPassword}
+          onToggle={() => setShowPassword((previous) => !previous)}
+          describedBy={isLogin ? undefined : passwordRequirementsId}
+        />
+
+        {isLogin && (
+          <button
             type="button"
-            className="button-ghost"
+            className="button-ghost auth-text-action"
             onClick={() => navigate("/forgot-password")}
-            >
+          >
             Forgot password?
-            </button>
+          </button>
         )}
 
+        {!isLogin && (
+          <>
+            <PasswordField
+              id={confirmPasswordId}
+              label="Confirm password"
+              placeholder="Confirm Password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              isRevealed={showConfirmPassword}
+              onToggle={() => setShowConfirmPassword((previous) => !previous)}
+            />
 
-          {mode === "register" && (
-            <>
-              <label className="sr-only" htmlFor={confirmPasswordId}>Confirm password</label>
-              <div className="password-field">
-                <input
-                    id={confirmPasswordId}
-                    type={showConfirmPassword ? "text" : "password"}
-                    placeholder="Confirm Password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                />
-                <button
-                    type="button"
-                    className="password-toggle"
-                    aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
-                    onClick={() => setShowConfirmPassword((prev) => !prev)}
-                >
-                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-               </div>
-
-            <p className="auth-help">Password must include:</p>
-            <ul className="auth-help">
-            <li>At least 6 characters</li>
-            <li>One uppercase letter</li>
-            <li>One lowercase letter</li>
-            <li>One number</li>
-            <li>One special character</li>
-            </ul>
-            </>
-          )}
-
-          <button type="submit">
-            {mode === "login" ? "Log In" : "Register"}
-          </button>
-            </form>
-
-            <button
-              className="button-ghost"
-              onClick={switchMode}
+            <div
+              id={passwordRequirementsId}
+              className="auth-password-requirements auth-help"
             >
-              {mode === "login"
-                ? "Need an account? Register"
-                : "Already have an account? Log in"}
-            </button>
+              <p>Password must include:</p>
+              <ul>
+                <li>At least 6 characters</li>
+                <li>One uppercase letter</li>
+                <li>One lowercase letter</li>
+                <li>One number</li>
+                <li>One special character</li>
+              </ul>
+            </div>
           </>
         )}
+
+        {formError && (
+          <p
+            ref={formErrorRef}
+            className="auth-status auth-status--danger"
+            role="alert"
+            tabIndex="-1"
+          >
+            {formError.message}
+          </p>
+        )}
+
+        <button type="submit" className="auth-primary-action">
+          {isLogin ? "Log In" : "Register"}
+        </button>
+      </form>
+
+      <div className="auth-actions auth-actions--secondary">
+        <button
+          type="button"
+          className="button-ghost auth-text-action"
+          onClick={switchMode}
+        >
+          {isLogin
+            ? "Need an account? Register"
+            : "Already have an account? Log in"}
+        </button>
       </div>
-    </div>
+    </AuthShell>
   );
 }

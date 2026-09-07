@@ -56,8 +56,9 @@ silently treating every detected pattern as a financial fact.
   email. Settings currently provides email display and appearance controls,
   rather than a full account-management area.
 
-On smaller screens, navigation groups these areas under Home, Activity, Plan,
-Insights, and More. The underlying financial workflows are the same.
+Navigation uses Home, Activity, and Insights consistently across screen sizes.
+On smaller screens, Plan groups Budgets, Commitments, and Paychecks, while More
+contains secondary destinations. The underlying financial workflows are the same.
 
 ## What the figures mean
 

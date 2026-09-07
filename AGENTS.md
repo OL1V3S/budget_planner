@@ -25,6 +25,10 @@ Agents should optimize for:
 Use this file as the concise operational entry point, then read only the
 sources relevant to the task:
 
+- [`PRODUCT_OVERVIEW.md`](PRODUCT_OVERVIEW.md) — concise human introduction to
+  Ordo's current shipped capabilities and product boundaries;
+- [`RECENT_CHANGES.md`](RECENT_CHANGES.md) — rolling history of recent meaningful
+  merged changes; GitHub remains the complete archive;
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — current system boundaries, module organization,
   dependency direction, and planned extension points;
 - [`ROADMAP.md`](ROADMAP.md) — engineering priorities, sequencing, and dependencies;
@@ -133,6 +137,21 @@ Do not modify unrelated files.
 Do not use destructive git operations unless explicitly authorized.
 
 Prefer exact-path staging over `git add .` or `git add -A`.
+
+### Product documentation maintenance
+
+For meaningful implementation work, update `RECENT_CHANGES.md` in the same PR
+when appropriate. Record changes at the merged-PR level, not per commit or
+bounded correction. Keep entries newest-first and capped at 20, removing the
+oldest when adding entry 21. Follow the entry format in that file; trivial
+typo-only, formatting-only, or mechanical work with no meaningful effect needs
+no entry. Do not backfill history: completed UX V3 work governed by #127 creates
+the first real entry.
+
+Update `PRODUCT_OVERVIEW.md` only when shipped high-level product capabilities
+or positioning materially change. Routine fixes and refactors may warrant a
+recent-changes entry without an overview edit. Never present planned behavior
+as shipped behavior in the overview.
 
 ### Implementation and publication capabilities
 

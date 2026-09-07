@@ -3,6 +3,7 @@ import Card from "../../../shared/ui/Card";
 
 export default function ExpenseList({
   expenses,
+  totalCount,
   filteredCount,
   entriesPerPage,
   showAll,
@@ -14,13 +15,23 @@ export default function ExpenseList({
   onSave,
   onCancel,
   onDelete,
+  busy = false,
+  taskLocked = false,
+  readUnavailable = false,
 }) {
-  if (!expenses || expenses.length === 0) return <p className="empty-state">No expenses found.</p>;
+  if (!expenses || expenses.length === 0) {
+    const hasRecordedExpenses = typeof totalCount === "number" && totalCount > 0;
+    return (
+      <p className="empty-state expense-list__empty">
+        {hasRecordedExpenses ? "No expenses match these filters." : "No expenses recorded yet."}
+      </p>
+    );
+  }
 
   return (
-    <Card as="section" className="section">
-      <div className="table-wrapper" role="region" aria-label="Expenses table" tabIndex="0">
-        <table className="data-table" border="1" cellPadding="6">
+    <Card className="section expense-list">
+      <div className="table-wrapper expense-list__table-wrapper" role="region" aria-label="Expenses table" tabIndex="0">
+        <table className="data-table expense-table">
           <caption className="sr-only">Expenses</caption>
           <thead>
             <tr>
@@ -44,6 +55,9 @@ export default function ExpenseList({
                 onSave={onSave}
                 onCancel={onCancel}
                 onDelete={onDelete}
+                busy={busy}
+                taskLocked={taskLocked}
+                readUnavailable={readUnavailable}
               />
             ))}
           </tbody>
@@ -51,7 +65,7 @@ export default function ExpenseList({
       </div>
 
       {!showAll && filteredCount > entriesPerPage && (
-        <button className="mt-2" onClick={onShowAll}>
+        <button type="button" className="mt-2 expense-list__show-more" onClick={onShowAll} disabled={busy}>
           Show More
         </button>
       )}

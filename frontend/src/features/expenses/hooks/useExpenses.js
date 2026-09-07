@@ -25,19 +25,30 @@ export function useExpenses() {
 
   useEffect(() => { refresh().catch(() => {}); }, [refresh]);
 
+  // A successful write remains successful if the following list read fails.
+  // Let the page explain that distinction without inviting a duplicate create.
+  async function refreshAfterWrite() {
+    try {
+      await refresh();
+      return { refreshFailed: false };
+    } catch {
+      return { refreshFailed: true };
+    }
+  }
+
   async function addExpense(payload) {
     await expensesApi.create(payload);
-    await refresh();
+    return refreshAfterWrite();
   }
 
   async function updateExpense(id, payload) {
     await expensesApi.update(id, payload);
-    await refresh();
+    return refreshAfterWrite();
   }
 
   async function deleteExpense(id) {
     await expensesApi.remove(id);
-    await refresh();
+    return refreshAfterWrite();
   }
 
   return { expenses, loading, error, refresh, addExpense, updateExpense, deleteExpense };

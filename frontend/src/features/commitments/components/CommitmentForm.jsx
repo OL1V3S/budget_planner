@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import FormField from "../../../shared/ui/FormField";
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -25,22 +25,29 @@ function numberOrNull(value) {
   return value === "" ? null : Number(value);
 }
 
-export default function CommitmentForm({ model, fingerprint, submitLabel, busy, onSubmit, onCancel }) {
-  const [form, setForm] = useState(() => initialForm(model));
+export default function CommitmentForm({ model, fingerprint, submitLabel, busy, submitDisabled = false, initialDraft, onDraftChange, onSubmit, onCancel }) {
+  const [form, setForm] = useState(() => initialDraft ?? initialForm(model));
+  const nameRef = useRef(null);
+  useEffect(() => { nameRef.current?.focus(); }, []);
+
+  function saveDraft(next) {
+    setForm(next);
+    onDraftChange?.(next);
+  }
 
   function update(name, value) {
-    setForm((current) => ({ ...current, [name]: value }));
+    saveDraft({ ...form, [name]: value });
   }
 
   function updateCadence(cadence) {
-    setForm((current) => ({
-      ...current,
+    saveDraft({
+      ...form,
       cadence,
       timingKind: cadence === "weekly" ? "weekday" : cadence === "yearly" ? "monthandday" : "dayofmonth",
-      expectedDayOfWeek: cadence === "weekly" ? (current.expectedDayOfWeek || "monday") : "",
-      expectedDay: cadence === "weekly" ? "" : (current.expectedDay || "1"),
-      expectedMonth: cadence === "yearly" ? (current.expectedMonth || "1") : "",
-    }));
+      expectedDayOfWeek: cadence === "weekly" ? (form.expectedDayOfWeek || "monday") : "",
+      expectedDay: cadence === "weekly" ? "" : (form.expectedDay || "1"),
+      expectedMonth: cadence === "yearly" ? (form.expectedMonth || "1") : "",
+    });
   }
 
   function handleSubmit(event) {
@@ -68,9 +75,9 @@ export default function CommitmentForm({ model, fingerprint, submitLabel, busy, 
   }
 
   return (
-    <form className="commitment-form" onSubmit={handleSubmit}>
-      <div className="form-grid">
-        <FormField label="Name">{(id) => <input id={id} required maxLength="500" value={form.name} onChange={(event) => update("name", event.target.value)} />}</FormField>
+    <form className="commitment-form" aria-label={submitLabel} onSubmit={handleSubmit}>
+      <fieldset className="form-grid commitment-form__fields" disabled={busy}>
+        <FormField label="Name">{(id) => <input ref={nameRef} id={id} required maxLength="500" value={form.name} onChange={(event) => update("name", event.target.value)} />}</FormField>
         <FormField label="Category">{(id) => <input id={id} required maxLength="100" value={form.category} onChange={(event) => update("category", event.target.value)} />}</FormField>
         <FormField label="Cadence">{(id) => <select id={id} value={form.cadence} onChange={(event) => updateCadence(event.target.value)}>
           <option value="weekly">Weekly</option>
@@ -114,9 +121,9 @@ export default function CommitmentForm({ model, fingerprint, submitLabel, busy, 
             <FormField label="Maximum amount">{(id) => <input id={id} type="number" required min="0.01" step="0.01" value={form.expectedMaximumAmount} onChange={(event) => update("expectedMaximumAmount", event.target.value)} />}</FormField>
           </>
         )}
-      </div>
+      </fieldset>
       <div className="inline-actions commitment-form__actions">
-        <button type="submit" disabled={busy}>{busy ? "Saving..." : submitLabel}</button>
+        <button type="submit" disabled={busy || submitDisabled}>{busy ? "Saving..." : submitLabel}</button>
         <button type="button" className="button-ghost" disabled={busy} onClick={onCancel}>Cancel</button>
       </div>
     </form>

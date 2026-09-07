@@ -30,11 +30,13 @@ silently treating every detected pattern as a financial fact.
 - **Budgets:** Set monthly spending limits for default or custom categories,
   adjust or remove them, and compare recorded spending with each limit and its
   percentage used.
-- **Commitments:** Review recurring-expense suggestions and their transaction
-  evidence. Confirm or dismiss suggestions, revisit dismissed ones, edit saved
-  expectations, and manage active, paused, or ended commitments. Change reviews
-  surface supported amount or timing changes and payments not seen recently;
-  accepting a change remains your decision.
+- **Commitments:** See active saved expectations, amounts, and timing patterns
+  first, then review supported changes and possible recurring expenses. Edit,
+  pause, reactivate, or end saved commitments; confirm or dismiss suggestions.
+  Details disclose supporting records, while inactive, reviewed, and dismissed
+  history sits in expandable groups. Amount and timing comparisons and payments
+  not seen recently stay visible for review; accepting a change remains your
+  decision. Saved timing describes a pattern, not an upcoming payment forecast.
 - **Paychecks:** See active saved expectations first, with expected amounts and
   the next available payment window, then review possible recurring deposits.
   Add a paycheck manually or manage existing profiles; paused, ended, and

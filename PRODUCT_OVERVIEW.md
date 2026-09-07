@@ -41,8 +41,9 @@ silently treating every detected pattern as a financial fact.
   guaranteed deposits or employer-verified earnings.
 - **Insights / Analytics:** Compare recorded cash in with spending for a selected
   month and see the difference as net recorded cash flow. Explore a six-month
-  trend, spending categories, budget usage, month-over-month category changes,
-  and the largest expenses. Cash in is split into amounts linked to confirmed
+  trend and ranked spending categories, with budget usage, month-over-month
+  category changes, and largest expenses available under More spending detail.
+  Cash in is split into amounts linked to confirmed
   paychecks and all other recorded inflows.
 - **Statement import:** Upload a supported, text-extractable Sunflower Bank PDF,
   review parsed rows, edit eligible expense rows, inspect possible-duplicate

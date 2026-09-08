@@ -29,7 +29,10 @@ export default function AppShell({ email, onLogout }) {
   const accountMenuRef = useRef(null);
   const accountButtonRef = useRef(null);
   const mainRef = useRef(null);
-  const primaryDestinations = APP_DESTINATIONS.filter((destination) => destination.to !== "/settings");
+  const primaryDestinations = APP_DESTINATIONS.filter((destination) =>
+    !["/settings", "/investing"].includes(destination.to));
+  const secondaryDestinations = ["/settings", "/investing"]
+    .map((to) => APP_DESTINATIONS.find((destination) => destination.to === to));
   const settingsDestination = APP_DESTINATIONS.find((destination) => destination.to === "/settings");
   const { pathname } = useLocation();
   const path = pathname.replace(/\/+$/, "") || "/";
@@ -78,9 +81,11 @@ export default function AppShell({ email, onLogout }) {
           ))}
         </nav>
         <div className="app-sidebar__utilities">
-          <div className="app-sidebar__settings">
-            <NavigationLink destination={settingsDestination} />
-          </div>
+          <nav className="app-sidebar__secondary" aria-label="Secondary navigation">
+            {secondaryDestinations.map((destination) => (
+              <NavigationLink key={destination.to} destination={destination} />
+            ))}
+          </nav>
           <span className="app-sidebar__identity">{email || "Signed in"}</span>
           <button type="button" className="button-ghost app-sidebar__logout" onClick={onLogout}>
             <LogOut size={18} aria-hidden="true" />

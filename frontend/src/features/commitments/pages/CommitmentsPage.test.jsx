@@ -93,7 +93,7 @@ describe("Commitments workspace", () => {
     expect(saved.getByText("Active")).toBeVisible();
     expect(saved.getByText("Expected amount")).toBeVisible();
     expect(saved.getAllByText("$1,200.00")[0]).toBeVisible();
-    expect(saved.getByText("housing · Monthly")).toBeVisible();
+    expect(saved.getByText("Housing · Monthly")).toBeVisible();
     expect(saved.getByText("Day 1, with a 1-day before / 1-day after window")).toBeVisible();
     expect(saved.getByRole("button", { name: "Edit Rent" })).toBeVisible();
     expect(saved.getByRole("button", { name: "Pause Rent" })).toBeVisible();
@@ -103,6 +103,7 @@ describe("Commitments workspace", () => {
     expect(saved.getByText("3 linked expense(s)")).toBeVisible();
     expect(saved.getByText("Records used to confirm", { selector: "h4" })).toBeVisible();
     expect(saved.getByText("Sunflower statement")).toBeVisible();
+    expect(saved.getByText("May 15, 2026 · Housing")).toBeVisible();
     expect(saved.queryByText(/revision/i)).not.toBeInTheDocument();
 
     const possible = within(card("Gym membership"));
@@ -115,6 +116,7 @@ describe("Commitments workspace", () => {
     expect(possible.getByText("3 expenses · Consecutive calendar months")).toBeVisible();
     expect(possible.getByText("Identical each time")).toBeVisible();
     expect(possible.getByText("commitment-v1")).toBeVisible();
+    expect(possible.getByText("Health · Monthly")).toBeVisible();
     expect(possible.getByText("Sunflower statement")).toBeVisible();
 
     for (const name of ["Paused commitments", "Ended commitments", "Reviewed changes", "Dismissed possible commitments"]) {
@@ -132,7 +134,7 @@ describe("Commitments workspace", () => {
     expect(screen.getByRole("heading", { name: "Ended rent" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Streaming service" })).toBeVisible();
     expect(within(history("Reviewed changes")).getByText("Current expectation")).toBeVisible();
-    expect(within(history("Reviewed changes")).getByText("Observed proposal")).toBeVisible();
+    expect(within(history("Reviewed changes")).getByText("Observed change")).toBeVisible();
   });
 
   it("keeps the complete month-end timing pattern visible for saved commitments and disclosed for candidates", async () => {

@@ -5,6 +5,7 @@ import { formatExpenseDate } from "../utils/calendarDate";
 
 export default function ExpenseItem({
   expense,
+  rowNumber,
   isEditing,
   editingData,
   setEditingData,
@@ -18,6 +19,7 @@ export default function ExpenseItem({
 }) {
   const selectedCategory = editingData.category || "";
   const descriptionInputRef = useRef(null);
+  const expenseLabel = `${displayText(expense.description)} from ${formatExpenseDate(expense.date)}, row ${rowNumber}`;
 
   useEffect(() => {
     if (isEditing) descriptionInputRef.current?.focus();
@@ -140,6 +142,7 @@ export default function ExpenseItem({
           <div className="inline-actions">
             <button
               type="button"
+              aria-label={`Edit expense ${expenseLabel}`}
               onClick={(event) => onStartEdit(expense, event.currentTarget)}
               disabled={busy || taskLocked || readUnavailable}
             >
@@ -148,6 +151,7 @@ export default function ExpenseItem({
             <button
               type="button"
               className="button-danger"
+              aria-label={`Delete expense ${expenseLabel}`}
               onClick={() => onDelete(expense.id)}
               disabled={busy || taskLocked || readUnavailable}
             >

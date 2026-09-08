@@ -17,6 +17,11 @@ describe('Settings supported account and appearance behavior', () => {
     expect(screen.getByText('person@example.com')).toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual([
+      'Appearance',
+      'Account',
+    ])
+    expect(screen.getByText('Signed-in email').tagName).toBe('DT')
   })
 
   it('uses the existing theme preference and persistence behavior', async () => {
@@ -25,7 +30,7 @@ describe('Settings supported account and appearance behavior', () => {
     const control = screen.getByRole('combobox', { name: 'Theme preference' })
 
     expect(control).toHaveValue('system')
-    expect(screen.getByText(/stored locally on this device/)).toBeInTheDocument()
+    expect(screen.getByText(/saved on this device/)).toBeInTheDocument()
 
     await user.selectOptions(control, 'dark')
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark')

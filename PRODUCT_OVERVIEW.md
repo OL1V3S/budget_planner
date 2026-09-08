@@ -28,9 +28,10 @@ silently treating every detected pattern as a financial fact.
   and categories, and expand date/category filters when needed. Open Add expense
   or Import statement to start a task; edit and delete remain available on each
   record. Active drafts and import review stay visible while you work.
-- **Budgets:** Set monthly spending limits for default or custom categories,
-  adjust or remove them, and compare recorded spending with each limit and its
-  percentage used.
+- **Budgets:** Review category spending against the selected month’s limits,
+  with visible progress and near-limit or over-limit status. Open add or edit
+  when needed; drafts keep their original month. Zero limits remain explicit
+  no-spend budgets, and unavailable spending is shown separately from zero.
 - **Commitments:** See active saved expectations, amounts, and timing patterns
   first, then review supported changes and possible recurring expenses. Edit,
   pause, reactivate, or end saved commitments; confirm or dismiss suggestions.
@@ -43,7 +44,7 @@ silently treating every detected pattern as a financial fact.
   Add a paycheck manually or manage existing profiles; paused, ended, and
   dismissed items sit in expandable groups. Card Details reveal linked records
   and schedule information. Profiles support several pay schedules and fixed
-  amounts or accepted ranges. These are expectations, not guaranteed deposits
+  amounts or expected ranges. These are expectations, not guaranteed deposits
   or employer-verified earnings.
 - **Insights / Analytics:** Compare recorded cash in with spending for a selected
   month and see the difference as net recorded cash flow. Explore a six-month
@@ -58,15 +59,19 @@ silently treating every detected pattern as a financial fact.
   Credits are optional and must be explicitly selected; they become inflow
   records without automatically being classified as income or paychecks.
   Scanned PDFs are not supported.
-- **Settings and account access:** View your signed-in email and choose a System,
-  Light, or Dark theme saved on your device. Account access includes registration,
+- **Settings and account access:** Choose a System, Light, or Dark theme first,
+  then view your signed-in email in a compact account section. Account access
+  includes registration,
   sign-in and sign-out, email confirmation and resend, and password recovery by
   email. Settings currently provides email display and appearance controls,
   rather than a full account-management area.
 
 Navigation uses Home, Activity, and Insights consistently across screen sizes.
-On smaller screens, Plan groups Budgets, Commitments, and Paychecks, while More
-contains secondary destinations. The underlying financial workflows are the same.
+On smaller screens, Plan is a simple hub for Budgets, Commitments, and Paychecks.
+More places Settings ahead of the explicitly unavailable Investing placeholder;
+these destinations also sit below the main desktop navigation. Details and
+history expand on demand, while active tasks, errors, and review warnings stay
+visible. The underlying financial workflows are the same.
 
 ## What the figures mean
 

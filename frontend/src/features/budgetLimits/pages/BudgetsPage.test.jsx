@@ -7,8 +7,12 @@ import { useBudgetLimits } from '../hooks/useBudgetLimits'
 vi.mock('../../expenses/hooks/useExpenses', () => ({ useExpenses: vi.fn() }))
 vi.mock('../hooks/useBudgetLimits', () => ({ useBudgetLimits: vi.fn() }))
 vi.mock('../components/BudgetLimitsPanel', () => ({
-  default: ({ limitMonthYear, setLimitMonthYear, totalsByCategory, upsertLimit, deleteLimit }) => (
+  default: ({ limitMonthYear, setLimitMonthYear, totalsByCategory, upsertLimit, deleteLimit, limitsLoading, limitsError, spendingLoading, spendingError, refreshLimits, refreshSpending }) => (
     <div data-testid="budget-panel">
+      <span data-testid="limits-state">{limitsLoading ? 'loading' : limitsError ? 'error' : 'ready'}</span>
+      <span data-testid="spending-state">{spendingLoading ? 'loading' : spendingError ? 'error' : 'ready'}</span>
+      <button onClick={refreshLimits}>Refresh limits</button>
+      <button onClick={refreshSpending}>Refresh spending</button>
       <span data-testid="budget-month">{limitMonthYear}</span>
       <span data-testid="budget-totals">{JSON.stringify(totalsByCategory)}</span>
       <button onClick={() => setLimitMonthYear('2026-07')}>Choose July</button>
@@ -67,4 +71,21 @@ describe('Budgets page ownership', () => {
     expect(screen.getByTestId('budget-totals')).toHaveTextContent('{"bills":50}')
     expect(useBudgetLimits).toHaveBeenLastCalledWith('2026-07')
   })
+  it('forwards independent read states and retry functions to the budget presentation', () => {
+    const refreshLimits = vi.fn()
+    const refreshSpending = vi.fn()
+    useBudgetLimits.mockReturnValue({ budgetLimits: [], loading: false, error: new Error('limits'), refresh: refreshLimits })
+    useExpenses.mockReturnValue({ expenses: [], loading: true, error: null, refresh: refreshSpending })
+    const { rerender } = render(<BudgetsPage />)
+    expect(screen.getByTestId('limits-state')).toHaveTextContent('error')
+    expect(screen.getByTestId('spending-state')).toHaveTextContent('loading')
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh limits' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh spending' }))
+    expect(refreshLimits).toHaveBeenCalledOnce()
+    expect(refreshSpending).toHaveBeenCalledOnce()
+    useExpenses.mockReturnValue({ expenses: [], loading: false, error: new Error('spending'), refresh: refreshSpending })
+    rerender(<BudgetsPage />)
+    expect(screen.getByTestId('spending-state')).toHaveTextContent('error')
+  })
+
 })

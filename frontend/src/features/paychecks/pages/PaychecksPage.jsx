@@ -27,14 +27,14 @@ function CandidateCard({ candidate, dismissed, evaluatedOn, busy, actionsDisable
           <strong>{observed.mode === "fixed" ? formatMoney(observed.fixedAmount) : `${formatMoney(observed.minimumAmount)}–${formatMoney(observed.maximumAmount)}`}</strong>
         </div>
       </header>
-      <p className="paycheck-candidate-count">Based on {candidate.occurrenceCount} deposits{observed.mode !== "fixed" && ". Observed history, not an accepted range."}</p>
+      <p className="paycheck-candidate-count">Based on {candidate.occurrenceCount} deposits{observed.mode !== "fixed" && ". Observed history, not an expected range."}</p>
       <details className="paycheck-details">
         <summary aria-label={`Details for ${name}`}>Details</summary>
         <dl className="paycheck-facts">
           <div><dt>Schedule</dt><dd>{formatSchedule(candidate.schedule)}</dd></div>
           <div><dt>Records covered</dt><dd>{formatDate(candidate.coveredFrom)}–{formatDate(candidate.coveredTo)}</dd></div>
           <div><dt>Observed timing</dt><dd>{formatWindow(candidate.windowBeforeDays, candidate.windowAfterDays)}</dd></div>
-          <div><dt>Observed amounts</dt><dd>{observed.mode === "fixed" ? "The same amount in each deposit" : `Variable · lower median ${formatMoney(observed.lowerMedianAmount)}. This history is not an accepted range.`}</dd></div>
+          <div><dt>Observed amounts</dt><dd>{observed.mode === "fixed" ? "The same amount in each deposit" : `Variable · lower median ${formatMoney(observed.lowerMedianAmount)}. This history is not an expected range.`}</dd></div>
           {evaluatedOn && <div><dt>Evaluated</dt><dd>{formatDate(evaluatedOn)}</dd></div>}
           <div><dt>Detection details</dt><dd>{candidate.algorithmVersion}</dd></div>
         </dl>

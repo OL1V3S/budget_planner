@@ -240,7 +240,9 @@ describe("Paychecks page", () => {
     const other = makeCandidate({ fingerprint: "d".repeat(64), normalizedDescriptionIdentity: "other payroll" });
     loadState({ candidates: [variable, other], paychecks: [] });
     await renderPage();
-    await user.click(within(card("acme payroll")).getByRole("button", { name: "Review and confirm acme payroll" }));
+    const variableCard = within(card("acme payroll"));
+    expect(variableCard.getByText(/Observed history, not an expected range/)).toBeVisible();
+    await user.click(variableCard.getByRole("button", { name: "Review and confirm acme payroll" }));
     const form = within(screen.getByRole("form", { name: "Confirm paycheck" }));
     expect(form.getByLabelText("Minimum amount")).toHaveValue("");
     expect(form.getByLabelText("Maximum amount")).toHaveValue("");

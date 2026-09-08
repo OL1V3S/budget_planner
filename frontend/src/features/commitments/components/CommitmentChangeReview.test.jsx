@@ -113,7 +113,7 @@ describe("commitment change review", () => {
     const pendingGym = within(pendingSection).getByRole("heading", { name: "Gym plan", level: 3 }).closest("article");
 
     const currentExpectation = within(pendingGym).getByText("Current expectation").closest("div");
-    const observedProposal = within(pendingGym).getByText("Observed proposal").closest("div");
+    const observedProposal = within(pendingGym).getByText("Observed change").closest("div");
     expect(within(currentExpectation).getByText("$20.00")).toBeVisible();
     expect(within(observedProposal).getByText("$25.00")).toBeVisible();
     expect(within(pendingGym).getByText("2 recent expenses support this amount change.")).toBeVisible();
@@ -133,6 +133,8 @@ describe("commitment change review", () => {
     expect(reviewedHistory()).not.toHaveAttribute("open");
     await user.click(reviewedHeading().closest("summary"));
     const keptGym = within(reviewedHistory()).getByRole("heading", { name: "Gym plan", level: 3 }).closest("article");
+    expect(within(keptGym).getByText("Reviewed change")).toBeVisible();
+    expect(within(keptGym).getByText("Health · Monthly")).toBeVisible();
     const timingDetails = within(keptGym).getByLabelText("Details for timing change for Gym plan").closest("details");
     expect(timingDetails).not.toHaveAttribute("open");
     await user.click(within(keptGym).getByLabelText("Details for timing change for Gym plan"));

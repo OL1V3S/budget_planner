@@ -1,29 +1,32 @@
 import { Link } from "react-router-dom";
 import { PLAN_DESTINATIONS } from "../navigation";
+import "../../styles/secondary-pages.css";
 
 export default function PlanPage() {
   return (
-    <div className="shell-page navigation-hub">
+    <div className="shell-page secondary-page">
       <header className="page-header">
         <div>
-          <p className="page-header__eyebrow">Plan</p>
           <h1>Plan</h1>
-          <p className="muted">Build a practical plan for spending, recurring commitments, and income.</p>
+          <p className="muted">Choose an area to plan.</p>
         </div>
       </header>
 
-      <div className="navigation-hub__cards">
+      <nav aria-label="Planning tools">
+        <ul className="secondary-links secondary-links--plan">
         {PLAN_DESTINATIONS.map((destination) => {
-          const { to, label, icon: Icon, description } = destination;
+          const { to, label, icon: Icon } = destination;
           return (
-            <Link className="card navigation-hub__link" to={to} key={to}>
-              <Icon className="navigation-hub__icon" size={24} aria-hidden="true" />
-              <h2 className="h2">{label}</h2>
-              <span className="navigation-hub__description">{description}</span>
-            </Link>
+            <li key={to}>
+              <Link className="secondary-link" to={to}>
+                <Icon className="secondary-link__icon" size={20} aria-hidden="true" />
+                <span className="secondary-link__label">{label}</span>
+              </Link>
+            </li>
           );
         })}
-      </div>
+        </ul>
+      </nav>
     </div>
   );
 }

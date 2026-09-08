@@ -197,7 +197,7 @@ export default function AnalyticsPage() {
                     <div>
                       <p className="analytics-kicker">Top five</p>
                     </div>
-                    <Link to="/transactions">Review transactions</Link>
+                    <Link to="/transactions">Review activity</Link>
                   </div>
                   {insights.largestExpenses.length === 0 ? (
                     <StatusMessage>No expenses to rank for this month.</StatusMessage>

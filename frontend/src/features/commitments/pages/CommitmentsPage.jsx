@@ -7,6 +7,7 @@ import CommitmentForm from "../components/CommitmentForm";
 import { useCommitments } from "../hooks/useCommitments";
 import { formatDate, formatMoney } from "../utils/formatCommitments";
 import groupCommitmentChanges from "../utils/groupCommitmentChanges";
+import { displayText } from "../../../utils/text";
 
 const EVIDENCE_RULES = {
   consecutive_calendar_months: "Consecutive calendar months",
@@ -45,7 +46,7 @@ function CandidateCard({ candidate, dismissed, state, task, disabled, onOpen, on
         <div>
           {dismissed && <p className="commitment-status">Dismissed possible commitment</p>}
           <h3>{candidate.description}</h3>
-          <p className="muted">{candidate.category} · {title(candidate.cadence)}</p>
+          <p className="muted">{displayText(candidate.category)} · {title(candidate.cadence)}</p>
         </div>
         <div className="commitment-card__value"><span>Observed amount{candidate.observedAmountMode === "fixed" ? "" : " range"}</span><strong className="commitment-card__amount">{amountSummary(candidate)}</strong></div>
       </div>
@@ -91,7 +92,7 @@ function ConfirmedCommitmentCard({ commitment, state, task, disabled, onOpen, on
         <div>
           <p className="commitment-status">{title(commitment.lifecycle)}</p>
           <h3>{commitment.name}</h3>
-          <p className="muted">{commitment.category} · {title(commitment.cadence)}</p>
+          <p className="muted">{displayText(commitment.category)} · {title(commitment.cadence)}</p>
         </div>
         <div className="commitment-card__value"><span>Expected amount</span><strong className="commitment-card__amount">{amountSummary(commitment)}</strong></div>
       </div>

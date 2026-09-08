@@ -44,10 +44,11 @@ export default function ExpenseList({
           </thead>
 
           <tbody>
-            {expenses.map((expense) => (
+            {expenses.map((expense, index) => (
               <ExpenseItem
                 key={expense.id}
                 expense={expense}
+                rowNumber={index + 1}
                 isEditing={editingExpenseId === expense.id}
                 editingData={editingExpenseData}
                 setEditingData={setEditingExpenseData}

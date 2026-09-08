@@ -3,6 +3,7 @@ import Card from "../../../shared/ui/Card";
 import CommitmentEvidence from "./CommitmentEvidence";
 import { formatDate, formatMoney } from "../utils/formatCommitments";
 import groupCommitmentChanges from "../utils/groupCommitmentChanges";
+import { displayText } from "../../../utils/text";
 
 function title(value) {
   const text = value?.replaceAll("_", " ").replace(/([a-z])([A-Z])/g, "$1 $2") ?? "";
@@ -80,7 +81,7 @@ function Comparison({ change, dimension, assessment }) {
   return (
     <dl className="commitment-change__comparison">
       <div><dt>Current expectation</dt><dd>{current}</dd></div>
-      <div><dt>Observed proposal</dt><dd>{proposed}</dd></div>
+      <div><dt>Observed change</dt><dd>{proposed}</dd></div>
     </dl>
   );
 }
@@ -147,7 +148,7 @@ function ChangeActions({ change, dimension, assessment, state, kept, activeTask,
     return (
       <div className="commitment-change__confirmation" role="group" aria-labelledby={confirmationId}>
         <p id={confirmationId}>
-          Mark {name} ended? This changes its lifecycle, and you can change it again from the confirmed commitment.
+          Mark {name} ended? This changes its status, and you can change it again from the confirmed commitment.
         </p>
         <div className="inline-actions">
           <button
@@ -244,9 +245,9 @@ function ChangeCard({ change, state, kept, activeTask, onTaskChange, onReviewedO
     <Card as="article" className={`commitment-card commitment-change-card${kept ? " commitment-change-card--kept" : ""}`}>
       <div className="commitment-card__header">
         <div>
-          <p className="commitment-card__eyebrow">{kept ? "Kept change" : "Needs your decision"}</p>
+          <p className="commitment-card__eyebrow">{kept ? "Reviewed change" : "Needs your decision"}</p>
           <h3>{change.commitment.name}</h3>
-          <p className="muted">{change.commitment.category} · {title(change.commitment.cadence)}</p>
+          <p className="muted">{displayText(change.commitment.category)} · {title(change.commitment.cadence)}</p>
         </div>
       </div>
 

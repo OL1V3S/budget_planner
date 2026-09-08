@@ -235,7 +235,7 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
     try {
       if (result.importedExpenseCount > 0) await onImportConfirmed();
     } catch {
-      setRefreshError("The import succeeded, but Transactions could not be refreshed. Reload this page to see imported expenses.");
+      setRefreshError("The import succeeded, but Activity could not be refreshed. Reload this page to see imported expenses.");
     }
   }
 

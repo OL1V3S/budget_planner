@@ -1,14 +1,160 @@
 # Ordo Engineering Roadmap
 
 This document is the engineering capability and maturity roadmap for Ordo. It
-is not the product backlog. Product features belong here only when
-they create an engineering dependency or materially change how the system must
-be built, verified, secured, or operated.
+is not the product backlog. Product direction belongs here only where it shapes
+what the system must be able to support, verify, secure, or operate safely.
 
-Roadmap priority and product-feature blocking status are separate judgments.
-Important engineering work may proceed incrementally in parallel with product
-development unless a concrete dependency makes it part of a feature's critical
-path.
+Roadmap priority and product-feature priority are separate judgments. Updating
+this file does not authorize implementation. GitHub Issues and `AGENTS.md`
+remain the authority for selecting work, classifying risk, obtaining approval,
+reviewing changes, merging, and performing production operations.
+
+## Product Direction
+
+Ordo is moving toward a **manual-first, intelligence-assisted** personal finance
+workflow.
+
+The primary everyday loop is to keep Ordo current as money actually moves:
+
+- when money goes out, the user records the Expense;
+- when money comes in, the user records the actual cash-in;
+- recurring paycheck and commitment intelligence learns from recorded activity,
+  reduces repeated work, and surfaces useful patterns;
+- expectations and projections help the user plan, but never become historical
+  money merely because time passed; and
+- statement import is a catch-up and reconciliation aid, not the required
+  primary workflow.
+
+The product should become easier to maintain continuously, not more dependent on
+month-end cleanup. Intelligence should assist explicit financial truth rather
+than silently invent it.
+
+### Product principles
+
+1. **Actual money movement comes first.** Recorded outflows and inflows should be
+   equally first-class everyday actions.
+2. **Observed and expected are different facts.** Historical cash flow comes
+   from persisted observations. Paycheck and commitment expectations remain
+   future-looking until an actual event is recorded.
+3. **Intelligence reduces work.** Detection, matching, prefill, recurrence, and
+   suggestions should make future entry easier without weakening correctness.
+4. **Durable inferred meaning is explicit.** When a record becomes a confirmed
+   paycheck, commitment, or other meaningful financial relationship, the user
+   should understand and control that transition unless a separately approved
+   authoritative source justifies automation.
+5. **Import is secondary.** Statement import should help users catch up, verify,
+   or reconcile records; it should not be required for the normal daily loop.
+6. **Automation must earn trust.** Background or automatic actions should follow
+   only after deterministic semantics, failure behavior, and verification are
+   strong enough to make them safe.
+7. **Calm on the surface, rigorous underneath.** UX should remain simple while
+   financial semantics, provenance, validation, and error states stay precise.
+
+## Product Capability Direction
+
+The sequence below describes the capabilities the engineering roadmap should
+support. It is directional context, not an automatically executable backlog.
+
+### 1. Complete the manual money-movement loop
+
+Ordo already supports first-class manual Expense entry and backend manual
+`AccountInflow` CRUD. The next product capability direction is to make incoming
+money equally usable from the customer experience.
+
+Engineering should support:
+
+- first-class manual cash-in entry in the frontend;
+- truthful loading, failure, retry, and uncertain-write states matching the
+  standards already used for Expenses and Budgets;
+- immediate participation of saved inflows in historical cash-flow analytics;
+- an explicit **Record paycheck received** workflow that creates an actual
+  inflow rather than converting an expectation into money automatically;
+- explicit linkage of an actual inflow to the appropriate paycheck profile when
+  the user confirms that relationship; and
+- one-inflow-at-most-one-paycheck ownership and concurrency protection.
+
+A projected payday must never create cash automatically. If the user does
+nothing, historical totals remain unchanged.
+
+### 2. Make Activity represent the money the user records as they go
+
+The customer mental model should become coherent across money out and money in.
+Engineering should support a clear recorded-activity experience where the user
+can understand what has been persisted without mixing observations with
+forecasts.
+
+This may eventually include a unified or coordinated Activity presentation for
+Expenses and AccountInflows, but exact product design must be approved before
+implementation. Existing Expense and inflow semantics should not be collapsed
+into a generic transaction model merely for UI convenience.
+
+### 3. Build intelligence on top of actual records
+
+Recurring intelligence should increasingly reduce manual repetition after the
+basic recording loop is coherent.
+
+Engineering should support, when separately approved:
+
+- deterministic suggestions that connect newly recorded inflows to known
+  paycheck profiles;
+- recurring-expense and commitment learning from recorded Expenses;
+- recurring-paycheck learning from recorded inflows;
+- clear confidence/evidence presentation and reversible user decisions;
+- change detection where enough evidence exists to define a trustworthy rule;
+  and
+- prefilled actions that preserve the distinction between an expectation and an
+  observed event.
+
+Do not introduce fuzzy or LLM-only financial classification merely because it
+is convenient. Deterministic, explainable matching remains the default until a
+stronger approach has explicit semantics and verification.
+
+### 4. Improve ongoing planning and financial awareness
+
+Once recorded activity is easy to maintain, Ordo should make those records more
+useful for everyday decisions.
+
+The roadmap should support:
+
+- clear historical cash-in, spending, and net recorded cash-flow views;
+- budget attention based on recorded spending;
+- expected paycheck and commitment context that remains visibly separate from
+  historical totals;
+- useful trend and category analysis; and
+- future planning features only when their data requirements and financial
+  meaning are explicit.
+
+Safe-to-Spend, canonical balance, forecasted balance, overdraft prediction, and
+expense-to-paycheck allocation remain separate product decisions. They must not
+be inferred from the current historical cash-flow model.
+
+### 5. Treat import as catch-up and reconciliation support
+
+Statement import remains valuable, but its role changes from product center to
+supporting workflow.
+
+Engineering should preserve and extend import so it can:
+
+- help a user catch up after not recording activity for a period;
+- surface possible duplicates instead of silently duplicating records;
+- preserve explicit selection and confirmation before persistence;
+- support additional institutions only when representative privacy-safe fixtures
+  and parser verification exist; and
+- eventually assist reconciliation without claiming a canonical bank balance
+  before balance semantics are separately approved.
+
+### 6. Add safer automation only after the manual loop is trustworthy
+
+Potential later capabilities include reminders, missed-expected-event handling,
+automatic matching, background processing, and richer proactive insights.
+
+These should be introduced only when:
+
+- the underlying event semantics are already explicit;
+- duplicate/idempotency behavior is deterministic;
+- false-positive and recovery behavior are acceptable;
+- the user can understand what the automation did; and
+- verification can prove the important failure paths.
 
 ## Engineering North Star
 
@@ -18,40 +164,47 @@ safely. Engineering controls should protect financial behavior and make
 failures diagnosable while keeping the architecture appropriately simple for a
 small full-stack product.
 
-## Current State
+## Current Shipped Foundation
 
-Ordo is an appropriately scoped modular monolith with a React/Vite
-frontend, an ASP.NET Core API, and PostgreSQL. The repository already has:
+Ordo is an appropriately scoped modular monolith with a React/Vite frontend, an
+ASP.NET Core API, and PostgreSQL. The current shipped foundation includes:
 
-- meaningful frontend component and characterization tests;
-- strong authentication-recovery, email-failure, rate-limit, concurrency, and
-  Data Protection coverage;
-- a deliberate production migration process that is separate from normal
-  application startup;
-- persistent Data Protection keys for reliable Identity tokens across backend
-  restarts;
-- frontend and backend GitHub Actions checks;
-- protected human merge authority; and
-- an established risk-sensitive, AI-assisted workflow in `AGENTS.md`.
+- authenticated Expense CRUD and monthly category budgets;
+- owner-scoped `AccountInflow` persistence and authenticated inflow CRUD;
+- Sunflower statement preview/import with explicit debit and credit selection;
+- recurring Commitment Intelligence with confirmation, lifecycle, evidence, and
+  reviewed change workflows;
+- Paycheck Intelligence with candidates, confirmed/manual profiles, lifecycle,
+  evidence links, and deterministic next-paycheck projection;
+- historical cash-flow analytics using recorded AccountInflows and Expenses;
+- the completed Ordo UX V3 information hierarchy and responsive/accessibility
+  pass;
+- frontend, backend/container, and PostgreSQL CI lanes; and
+- risk-sensitive AI-assisted repository governance in `AGENTS.md`.
 
-The principal maturity gaps are concentrated around financial write-boundary
-validation, explicit domain semantics, database-enforced invariants,
-PostgreSQL-backed integration testing, authentication/session correctness,
-production-equivalent CI, consistent errors, and operational diagnosis. The
-repository also needs an explicit security and persistence model before it
-accepts user-provided financial documents.
+Important current product gaps relative to the direction above include:
+
+- no first-class frontend manual cash-in workflow;
+- no explicit runtime action for recording a newly received paycheck against an
+  existing manual/confirmed paycheck profile;
+- no automatic attachment of later inflows to an existing paycheck profile;
+- no canonical tracked-account balance or reconciliation model;
+- no Safe-to-Spend or forecasted-balance semantics; and
+- no missed-paycheck diagnosis or background financial-event automation.
 
 ## Engineering Principles
 
 - Treat financial correctness as a product requirement.
+- Preserve the distinction between observations, classifications, expectations,
+  and projections.
 - Enforce important invariants through validation, tests, schemas, and CI where
   practical.
 - Gather evidence before adding abstractions or changing behavior.
 - Preserve existing behavior unless a semantic change is explicitly approved.
 - Prefer small, independently reviewable issues and pull requests.
-- Keep irreversible, security-sensitive, data, and production authority with a
-  human.
-- Increase agent autonomy only as automated verification makes it safe.
+- Keep irreversible, security-sensitive, data, and exceptional production
+  authority with a human.
+- Increase agent and product automation only as verification makes it safe.
 - Make production failures diagnosable without exposing credentials, tokens,
   financial descriptions, statements, or other sensitive data.
 - Add architecture only in response to demonstrated product or operating needs.
@@ -59,477 +212,281 @@ accepts user-provided financial documents.
 
 ## Roadmap Tracks
 
-Tracks communicate work that can usually progress in parallel. `Priority`
-describes engineering importance; `Blocks product work?` identifies whether an
-item blocks the currently planned Sunflower statement import or only becomes a
-blocker under stated conditions.
+Tracks communicate engineering capabilities that can usually progress in
+parallel. A track item becoming important does not itself select it as current
+work; task selection still follows `AGENTS.md` and durable GitHub state.
 
-### Track A — Financial Correctness
+### Track A — Financial Event Correctness
 
-#### A1. Characterize the existing financial APIs
+#### A1. Complete paycheck receipt semantics
 
-- **Goal:** Add behavior-preserving backend integration coverage for expense and
-  budget CRUD contracts, authentication, authorization, user isolation, current
-  amount/date/category/month behavior, duplicate budget behavior, status codes,
-  and failure paths.
-- **Why:** Core financial behavior has less backend regression protection than
-  authentication and must be understood before financial write paths change.
-- **Priority:** P1
-- **Risk:** Low
-- **Dependencies:** None.
-- **Completion criteria:** Tests document current behavior without changing
-  runtime semantics and cover cross-user read, update, and delete attempts.
-- **Blocks product work?** Yes — blocks Sunflower import write-path changes.
-- **Suggested GitHub issue?** Yes.
+- **Goal:** Define and implement the exact financial action for recording an
+  actual paycheck received against an existing paycheck profile.
+- **Why:** The current profile/projector models expectations correctly but does
+  not provide the everyday bridge from expected paycheck to observed cash-in.
+- **Priority:** Near-term product dependency.
+- **Risk:** High.
+- **Completion criteria:** Owner-approved semantics cover new versus existing
+  inflow linkage, actual amount/date, occurrence meaning, schedule-slot mapping,
+  one-inflow-one-profile enforcement, idempotency, edits/deletion, projection
+  advancement, and owner isolation. Historical totals change only through an
+  actual AccountInflow.
 
-#### A2. Decide and document financial-domain invariants
+#### A2. Keep inflow and expense write boundaries symmetric where appropriate
 
-- **Goal:** Obtain explicit human decisions for expense amount meaning and
-  ranges, refunds/credits, transaction dates, budget months, category
-  normalization, ownership, and budget uniqueness.
-- **Why:** Import code must not silently define or change product semantics.
-- **Priority:** P1
-- **Risk:** High
-- **Dependencies:** A1 provides current-behavior evidence.
-- **Completion criteria:** Approved decisions identify which rules belong in
-  API contracts, validation, tests, and database constraints. Semantic changes
-  are separated from behavior-preserving work.
-- **Blocks product work?** Yes — only the decisions relevant to safely importing
-  and persisting transactions must precede Sunflower import.
-- **Suggested GitHub issue?** Yes.
+- **Goal:** Give manual inflow entry the same quality of validation, truthful
+  write outcome handling, retry behavior, and user isolation already expected
+  from core Expense workflows.
+- **Why:** Manual-first tracking is incomplete if money-in entry is less reliable
+  or less understandable than money-out entry.
+- **Priority:** Near-term.
+- **Risk:** Medium to High depending on whether backend semantics change.
+- **Completion criteria:** Frontend and API tests preserve current inflow
+  validation/ownership rules and distinguish completed writes, failed reads, and
+  uncertain write outcomes without duplicate retries.
 
-#### A3. Harden necessary financial write boundaries
+#### A3. Preserve and strengthen financial invariants
 
-- **Goal:** Introduce only the request/response DTOs, validation, normalization,
-  and database protections required for safe financial writes.
-- **Why:** Persistence entities are currently accepted directly and important
-  validity rules are not consistently enforced at the API boundary.
-- **Priority:** P1
-- **Risk:** High
-- **Dependencies:** A1 and the relevant A2 decisions.
-- **Completion criteria:** Valid existing clients retain their intended
-  contracts; invalid writes receive controlled responses; ownership cannot be
-  supplied or overridden by clients; focused integration tests pass. Simple
-  CRUD may continue using EF Core directly.
-- **Blocks product work?** Conditional — the minimum safe imported-transaction
-  persistence boundary blocks Sunflower import; unrelated cleanup does not.
-- **Suggested GitHub issue?** Yes; split expense and budget work if needed.
+- **Goal:** Continue hardening amount/date/category/month, ownership, uniqueness,
+  and concurrency rules only where demonstrated gaps remain.
+- **Why:** Manual-first use increases the importance of correct everyday writes.
+- **Priority:** P1 when a concrete integrity gap affects active product work.
+- **Risk:** Medium to High.
+- **Completion criteria:** Each changed invariant is explicitly approved, tested
+  at the correct boundary, and database-enforced where corruption would be
+  otherwise possible.
 
-#### A4. Enforce budget uniqueness and concurrency behavior
+#### A4. Add balance/reconciliation semantics only through a separate decision
 
-- **Goal:** Guarantee the approved one-limit-per-user/category/month invariant
-  and define predictable concurrent-write behavior.
-- **Why:** The current read-then-write upsert has no matching database unique
-  constraint and can create duplicates.
-- **Priority:** P1
-- **Risk:** High
-- **Dependencies:** A1, the A2 budget decision, existing-data inspection, and a
-  reviewed migration/recovery plan.
-- **Completion criteria:** Existing duplicates are handled deliberately, a
-  database constraint enforces the approved invariant, concurrency tests pass,
-  and the generated migration SQL is reviewed before any production operation.
-- **Blocks product work?** Conditional — required before import only if imported
-  data writes or relies on budget limits.
-- **Suggested GitHub issue?** Yes; use a separate migration PR.
+- **Goal:** Define canonical balance, reconciliation, or forecast semantics only
+  if a future product feature truly requires them.
+- **Why:** Historical cash flow is not a bank balance and must not quietly become
+  one.
+- **Priority:** Deferred until product need is explicit.
+- **Risk:** High.
+- **Completion criteria:** Source of truth, opening/closing balance behavior,
+  missing-record handling, transfers, corrections, and reconciliation state are
+  owner-approved before implementation.
 
-#### A5. Make date, month, and category semantics consistent
+### Track B — Intelligence Assistance
 
-- **Goal:** Align frontend, API, and PostgreSQL handling of transaction dates,
-  month periods, and category normalization.
-- **Why:** Local-time calculations, `DateTime` handling, and client-only category
-  normalization can produce inconsistent grouping or duplicate category keys.
-- **Priority:** P1
-- **Risk:** High
-- **Dependencies:** A1 and A2.
-- **Completion criteria:** Boundary tests cover timezone-sensitive dates and
-  month edges; canonical category behavior is enforced at the appropriate
-  server/database boundary; any contract or schema change is separately
-  approved.
-- **Blocks product work?** Yes for the subset consumed by normalized imported
-  transactions.
-- **Suggested GitHub issue?** Yes.
+#### B1. Explicit paycheck matching assistance
 
-### Track B — Production Verification
+- **Goal:** Reduce repeated paycheck entry by suggesting or prefilling links
+  between real inflows and known paycheck profiles.
+- **Why:** Intelligence should save work after the user has established durable
+  paycheck meaning.
+- **Priority:** After the explicit manual receipt loop is coherent.
+- **Risk:** High if matching creates durable financial meaning automatically;
+  lower if suggestion-only.
+- **Completion criteria:** Matching identity, ambiguity, confidence, user control,
+  duplicate handling, and recovery are explicit and tested.
 
-#### B1. Add PostgreSQL-backed integration verification
+#### B2. Continue commitment/paycheck pattern learning
 
-- **Goal:** Run migrations and high-value financial persistence/API tests against
-  an ephemeral PostgreSQL instance.
-- **Why:** EF Core InMemory does not reproduce PostgreSQL constraints,
-  transactions, precision, timestamps, indexes, or concurrency.
-- **Priority:** P1
-- **Risk:** Low
-- **Dependencies:** A1; add A3–A5 cases as those behaviors are approved.
-- **Completion criteria:** CI starts an isolated PostgreSQL database, applies all
-  migrations, runs selected integration tests, and reports actionable failures.
-- **Blocks product work?** Yes — sufficient PostgreSQL verification for imported
-  transaction persistence must precede Sunflower import.
-- **Suggested GitHub issue?** Yes.
+- **Goal:** Improve recurring pattern usefulness without broadening financial
+  meaning silently.
+- **Why:** Learning from actual records is the main intelligence advantage of the
+  manual-first model.
+- **Priority:** Product-driven.
+- **Risk:** Depends on semantic impact.
+- **Completion criteria:** New detection/change rules are deterministic or have
+  separately approved probabilistic semantics, explainable evidence, and stable
+  replayable tests.
 
-#### B2. Verify migration evolution continuously
+#### B3. Proactive assistance only after event semantics are trustworthy
 
-- **Goal:** Prove that the complete migration chain creates the expected schema
-  without applying migrations during normal application startup.
-- **Why:** Migration safety depends on both reviewed operations and an executable
-  migration history.
-- **Priority:** P1
-- **Risk:** Low
-- **Dependencies:** B1.
-- **Completion criteria:** CI applies the migration chain from an empty database
-  and preserves the documented administrator-controlled production procedure.
-- **Blocks product work?** Conditional — blocks any import work requiring schema
-  changes if B1 does not already provide equivalent evidence.
-- **Suggested GitHub issue?** Yes; may be combined with B1.
+- **Goal:** Evaluate reminders, expected-event follow-up, or other proactive
+  assistance after the underlying record/link actions are stable.
+- **Why:** Notifications around ambiguous or automatically invented financial
+  events would reduce trust.
+- **Priority:** Deferred.
+- **Risk:** Medium to High.
+- **Completion criteria:** Trigger semantics, privacy, deduplication, retries,
+  stale-state handling, and user controls are approved and testable.
 
-#### B3. Build the production backend container in CI
+### Track C — Product Verification
 
-- **Goal:** Verify that the Render deployment artifact builds from each relevant
-  pull request.
-- **Why:** Source build success does not prove the Docker publish context and
-  runtime packaging are valid.
-- **Priority:** P1
-- **Risk:** Low
-- **Dependencies:** None.
-- **Completion criteria:** CI builds, but does not publish, the production image
-  and the check is required where repository policy permits.
-- **Blocks product work?** No.
-- **Suggested GitHub issue?** Yes.
+#### C1. Maintain production-equivalent financial CI
 
-#### B4. Add a minimal browser smoke suite
+- **Goal:** Keep frontend, backend/container, and PostgreSQL verification aligned
+  with the financial workflows Ordo actually ships.
+- **Why:** Manual daily usage makes regressions in writes, reads, and cross-domain
+  aggregation immediately user-visible.
+- **Priority:** P1.
+- **Risk:** Low.
+- **Completion criteria:** Required CI covers new inflow/paycheck receipt behavior
+  and migration chains where applicable without using hosted production data as
+  a test substitute.
 
-- **Goal:** Cover a few critical browser-to-API journeys, including authenticated
-  expense and budget behavior.
-- **Why:** Component and API tests do not prove complete browser integration.
-- **Priority:** P2
-- **Risk:** Medium
-- **Dependencies:** A stable isolated test environment and B1.
-- **Completion criteria:** A small deterministic suite runs without production
-  secrets or Gmail and has documented ownership for flaky-test correction.
-- **Blocks product work?** No by default; add an import preview/confirm smoke
-  journey when its value justifies the maintenance cost.
-- **Suggested GitHub issue?** Yes.
+#### C2. Add a minimal browser smoke suite
 
-#### B5. Verify repository protection and required checks
+- **Goal:** Prove a few critical browser-to-API journeys end to end.
+- **Why:** Component/API tests do not prove the complete customer workflow.
+- **Priority:** P2, rising as manual-first flows expand.
+- **Risk:** Medium.
+- **Completion criteria:** Deterministic isolated smoke coverage includes core
+  expense entry, cash-in entry once shipped, budgets, and one high-value
+  paycheck/receipt path without production secrets or real financial data.
 
-- **Goal:** Confirm that the expected frontend/backend checks and human review
-  policy are enforced for `main`.
-- **Why:** Workflow files alone do not prove branch-protection configuration.
-- **Priority:** P1
-- **Risk:** Medium
-- **Dependencies:** Stable required-job names.
-- **Completion criteria:** Required checks, review expectations, force-push
-  policy, and human merge authority are verified and recorded.
-- **Blocks product work?** No unless current protection is discovered to be
-  ineffective.
-- **Suggested GitHub issue?** No; use a repository-administration task.
+#### C3. Verify repository protection and required checks
 
-### Track C — Authentication and Security
+- **Goal:** Confirm that expected checks and human/command-center review policy
+  are actually enforced for `main`.
+- **Why:** Workflow files alone do not prove repository protection.
+- **Priority:** P1 operational maturity.
+- **Risk:** Medium.
+- **Completion criteria:** Required checks, force-push policy, review expectations,
+  and merge authority are verified and recorded.
 
-#### C1. Make login lockout behavior effective
+### Track D — Authentication and Security
 
-- **Goal:** Enforce and test the intended Identity lockout policy or replace it
+#### D1. Make login lockout behavior intentional and effective
+
+- **Goal:** Enforce and test the approved account lockout policy or replace it
   with an explicitly approved equivalent.
-- **Why:** Lockout is configured, while the current login path does not exercise
-  Identity's sign-in failure accounting.
-- **Priority:** P1
-- **Risk:** High
-- **Dependencies:** Human approval of lockout and public-response semantics.
-- **Completion criteria:** Integration tests cover failure counting, concurrent
-  attempts, lockout, successful recovery, and non-enumerating responses.
-- **Blocks product work?** No.
-- **Suggested GitHub issue?** Yes.
+- **Priority:** P1 security maturity.
+- **Risk:** High.
 
-#### C2. Define and harden the JWT/session policy
+#### D2. Define and harden session/JWT policy
 
-- **Goal:** Define issuer, audience, key requirements, lifetime, frontend storage,
-  and password-reset/revocation expectations.
-- **Why:** Current token trust and invalidation boundaries are implicit.
-- **Priority:** P1
-- **Risk:** High
-- **Dependencies:** Human decision on acceptable session behavior.
-- **Completion criteria:** Startup validation and integration tests cover
-  signature, issuer, audience, expiration, and the approved post-reset behavior.
-  Secure cookies or refresh tokens are introduced only as a separately approved
-  authentication design.
-- **Blocks product work?** No.
-- **Suggested GitHub issue?** Yes.
+- **Goal:** Make issuer, audience, key requirements, lifetime, storage, and
+  revocation expectations explicit and tested.
+- **Priority:** P1 security maturity.
+- **Risk:** High.
 
-#### C3. Improve endpoint throttling deliberately
+#### D3. Normalize auth privacy and throttling
 
-- **Goal:** Apply practical throttling to login, registration, confirmation, and
-  password-reset endpoints using appropriate source and account identifiers.
-- **Why:** Current confirmation/reset limits are process-local, and login and
-  registration lack comparable protection.
-- **Priority:** P1
-- **Risk:** Medium
-- **Dependencies:** C1 response policy; deployment topology.
-- **Completion criteria:** Limits, `Retry-After` behavior, privacy properties,
-  restart/multi-instance limitations, and tests are documented. A distributed
-  store is deferred until multiple replicas make it necessary.
-- **Blocks product work?** No.
-- **Suggested GitHub issue?** Yes.
+- **Goal:** Make enumeration resistance, endpoint throttling, and recovery
+  responses intentional across authentication flows.
+- **Priority:** P1 security maturity.
+- **Risk:** Medium to High.
 
-#### C4. Normalize authentication response privacy
+Authentication work does not automatically block manual-first product work
+unless a concrete security dependency is identified.
 
-- **Goal:** Make account-enumeration and error-response behavior intentional and
-  consistent across registration, login, confirmation, and password recovery.
-- **Why:** Current endpoints mix neutral and distinguishable responses.
-- **Priority:** P1
-- **Risk:** High
-- **Dependencies:** C1 and approved product/security semantics.
-- **Completion criteria:** Response contracts are documented and tested across
-  missing, confirmed, locked, invalid-token, and delivery-failure states.
-- **Blocks product work?** No.
-- **Suggested GitHub issue?** Yes.
+### Track E — Operations and Reliability
 
-### Track D — Operations and Reliability
+#### E1. Establish consistent API error contracts
 
-#### D1. Establish a consistent API error contract
+- **Goal:** Use stable, privacy-safe error codes where clients must branch on
+  failures.
+- **Why:** Manual-first UX needs reliable distinctions among validation, unknown
+  write outcomes, stale state, conflicts, and unavailable reads.
+- **Priority:** P1 when touching affected APIs.
+- **Risk:** Medium.
 
-- **Goal:** Use ASP.NET Problem Details and stable application codes where a
-  client must branch on an error.
-- **Why:** Mixed strings, arrays, anonymous objects, and empty errors make client
-  behavior and diagnosis inconsistent.
-- **Priority:** P1
-- **Risk:** Medium
-- **Dependencies:** Characterization tests for endpoints being changed.
-- **Completion criteria:** The contract is documented; intentional auth privacy
-  remains intact; frontend consumers render useful error/retry states.
-- **Blocks product work?** No by default; import endpoints must define their own
-  stable validation and parser errors before release.
-- **Suggested GitHub issue?** Yes; adopt incrementally rather than in one rewrite.
+#### E2. Health, readiness, and request correlation
 
-#### D2. Add health, readiness, and request correlation
+- **Goal:** Make production failures diagnosable without exposing financial
+  content.
+- **Priority:** P1 operational maturity.
+- **Risk:** Low.
 
-- **Goal:** Distinguish a live process from one ready to serve database-backed
-  traffic and correlate failures across logs.
-- **Why:** Deployment and incident diagnosis currently depend mainly on generic
-  platform logs.
-- **Priority:** P1
-- **Risk:** Low
-- **Dependencies:** None.
-- **Completion criteria:** Safe liveness/readiness endpoints, correlation IDs,
-  centralized exception logging, and tests exist without exposing secrets or
-  financial content.
-- **Blocks product work?** No.
-- **Suggested GitHub issue?** Yes.
+#### E3. Focused deployment smoke checks and runbooks
 
-#### D3. Add deployment smoke checks and focused runbooks
+- **Goal:** Make deploy/rollback and common incident recovery repeatable.
+- **Priority:** P2.
+- **Risk:** Low.
 
-- **Goal:** Make deployment verification and common recovery actions repeatable.
-- **Why:** Migration operations are well documented, but general deployment,
-  rollback, email outage, and incident diagnosis are not.
-- **Priority:** P2
-- **Risk:** Low
-- **Dependencies:** D2 and actual Render/Vercel/Neon capabilities.
-- **Completion criteria:** Short runbooks cover detection, containment, recovery,
-  and verification; smoke checks avoid destructive writes and production secrets.
-- **Blocks product work?** No.
-- **Suggested GitHub issue?** Yes.
+#### E4. Add observability only from demonstrated needs
 
-#### D4. Improve observability only from demonstrated needs
+- **Goal:** Use platform-native health, logs, and alerts before adopting a larger
+  telemetry stack.
+- **Priority:** P2.
+- **Risk:** Low.
 
-- **Goal:** Add the smallest metrics/alerts needed to diagnose real availability,
-  database, email, and import failures.
-- **Why:** Basic visibility is needed, but a complex telemetry stack would be
-  premature.
-- **Priority:** P2
-- **Risk:** Low
-- **Dependencies:** D2 and evidence from production operation.
-- **Completion criteria:** Platform-native signals are used first; sensitive
-  statement, transaction, token, credential, and key material is never logged.
-- **Blocks product work?** No.
-- **Suggested GitHub issue?** Conditional on a concrete signal gap.
+### Track F — Import and Reconciliation Support
 
-### Track E — Developer and Agent Experience
+#### F1. Keep statement import safe and secondary
 
-#### E1. Repair setup and verification documentation
+- **Goal:** Preserve the existing privacy, parser, preview, selection,
+  duplicate-warning, confirmation, and atomic-persistence guarantees while
+  treating import as a catch-up workflow.
+- **Why:** Import remains useful without defining the primary product interaction
+  model.
+- **Priority:** Maintenance / product-driven.
+- **Risk:** High for parser or financial-write semantic changes.
 
-- **Goal:** Make a fresh clone and local verification path accurate and
-  reproducible.
-- **Why:** The root and generated documentation contain stale SQL Server,
-  dependency-installation, verification, and sample-endpoint guidance.
-- **Priority:** P2
-- **Risk:** Low
-- **Dependencies:** Confirmed current commands and supported local services.
-- **Completion criteria:** One canonical setup guide documents exact runtime
-  expectations, environment configuration, `npm ci`, and all required checks;
-  stale generated guidance is removed or replaced.
-- **Blocks product work?** No.
-- **Suggested GitHub issue?** Yes.
+#### F2. Add institution support only with representative fixtures
 
-#### E2. Add a root verification entry point
+- **Goal:** Expand beyond current Sunflower support only when a representative
+  statement can be modeled safely with synthetic or irreversibly sanitized
+  regression fixtures.
+- **Priority:** Product-driven.
+- **Risk:** Medium to High.
 
-- **Goal:** Provide one discoverable command that runs the repository's required
-  frontend and backend checks.
-- **Why:** Humans and agents currently assemble the full verification sequence
-  from multiple directories and documents.
-- **Priority:** P2
-- **Risk:** Low
-- **Dependencies:** Stable CI commands.
-- **Completion criteria:** The root command matches CI, fails clearly, and is
-  referenced by `README.md` and `AGENTS.md` without hiding individual checks.
-- **Blocks product work?** No.
-- **Suggested GitHub issue?** Yes.
+#### F3. Reconciliation requires separate financial semantics
 
-#### E3. Document architecture and durable semantics
+- **Goal:** If Ordo later compares its records against statement/account totals,
+  define the exact reconciliation model before implementation.
+- **Why:** Duplicate detection and import confirmation are not equivalent to a
+  canonical bank ledger or balance.
+- **Priority:** Deferred until product need is explicit.
+- **Risk:** High.
 
-- **Goal:** Add a concise `ARCHITECTURE.md` describing system context, module
-  ownership, dependency direction, auth/session design, deployment topology,
-  and approved financial invariants.
-- **Why:** Important decisions currently must be reconstructed from code and
-  operational prose.
-- **Priority:** P2
-- **Risk:** Low
-- **Dependencies:** A2 and C2 for sections whose decisions are not yet settled.
-- **Completion criteria:** The document reflects executable behavior and uses
-  ADRs only for decisions with meaningful alternatives and durable consequences.
-- **Blocks product work?** No; the import pipeline specification may become a
-  focused architecture document independently.
-- **Suggested GitHub issue?** Yes.
+### Track G — Developer and Agent Experience
 
-#### E4. Tighten the agent harness with enforceable references
+#### G1. Keep setup, architecture, and verification docs current
 
-- **Goal:** Connect `AGENTS.md` to canonical architecture, semantic, and
-  verification sources without duplicating them.
-- **Why:** The current authority workflow is strong, but agents need durable
-  product constraints and machine-enforced definitions of done as autonomy grows.
-- **Priority:** P2
-- **Risk:** Low
-- **Dependencies:** E2 and E3; add scoped instructions only when they provide
-  distinct local constraints.
-- **Completion criteria:** GitHub Issues continue to define work; risk determines
-  authority; medium/high-risk changes require approval; PRs remain independently
-  reviewable; corrections stay on the PR branch; agents never merge; production
-  actions retain explicit human authority.
-- **Blocks product work?** No.
-- **Suggested GitHub issue?** Yes.
+- **Goal:** Ensure fresh-clone setup, architecture, product boundaries, and
+  verification instructions match executable behavior.
+- **Priority:** P2, or P1 when stale docs create delivery risk.
+- **Risk:** Low.
 
-#### E5. Remove proven dead code and dependencies
+#### G2. Maintain one canonical verification entry point
 
-- **Goal:** Remove unused packages, providers, models, and compatibility files
-  only after non-use is demonstrated.
-- **Why:** Unused surface area increases maintenance and misleads humans and
-  agents about the actual architecture.
-- **Priority:** P2
-- **Risk:** Low
-- **Dependencies:** Usage inspection and complete verification.
-- **Completion criteria:** Each removal is justified, lockfile changes are
-  intentional, and all relevant checks pass. Automated dependency updates remain
-  reviewable and are not auto-merged.
-- **Blocks product work?** No.
-- **Suggested GitHub issue?** Yes.
+- **Goal:** Keep root verification commands aligned with CI without hiding the
+  individual lanes.
+- **Priority:** P2.
+- **Risk:** Low.
 
-### Track F — Financial Import Readiness
+#### G3. Tighten the agent harness with enforceable references
 
-#### F1. Approve an import threat model
+- **Goal:** Prefer mechanical checks and durable repository guidance over
+  repeated prompt-only reminders when recurring failures reveal a real gap.
+- **Priority:** P2.
+- **Risk:** Low.
 
-- **Goal:** Define the security and privacy boundary before accepting financial
-  documents.
-- **Why:** PDFs are sensitive, untrusted input and introduce parser,
-  resource-exhaustion, retention, and disclosure risks.
-- **Priority:** P1
-- **Risk:** High
-- **Dependencies:** The initial supported scope: Sunflower Bank text-extractable
-  PDF statements.
-- **Completion criteria:** The approved model defines supported formats; maximum
-  file size; page, row, memory, CPU, and time limits; content/type validation;
-  malformed-input and parser-failure behavior; no execution of active or embedded
-  content; sensitive logging rules; transaction-description privacy;
-  document-retention/deletion behavior; and security test expectations.
-- **Blocks product work?** Yes — blocks accepting Sunflower statement uploads.
-- **Suggested GitHub issue?** Yes; planning and approval only.
+#### G4. Remove proven dead code and dependencies
 
-#### F2. Specify the normalized import pipeline
+- **Goal:** Remove unused surface only after non-use is demonstrated and complete
+  verification passes.
+- **Priority:** P2.
+- **Risk:** Low.
 
-- **Goal:** Define `parse → normalize → validate → deduplicate → preview →
-  confirm → persist` before implementation.
-- **Why:** Format-specific parsing must not leak into core financial semantics or
-  allow unreviewed records to be persisted.
-- **Priority:** P1
-- **Risk:** High
-- **Dependencies:** A1–A3, the relevant A5 decisions, B1, and F1.
-- **Completion criteria:** The specification defines the normalized imported
-  transaction model, provenance/source, parser version where useful, import batch
-  identity, per-row errors, idempotency, duplicate policy, preview/confirmation
-  lifecycle, atomic versus partial commit behavior, and handling for transactions
-  the existing expense model cannot safely represent.
-- **Blocks product work?** Yes.
-- **Suggested GitHub issue?** Yes; planning and approval only.
+## Current Capability Sequence
 
-#### F3. Establish sanitized import fixtures and verification
+This sequence describes the product direction the engineering roadmap should
+make possible. It does **not** authorize these items by itself.
 
-- **Goal:** Create a representative, privacy-safe fixture strategy for Sunflower
-  parsing and later bank formats.
-- **Why:** Real statements contain sensitive information, while parser behavior
-  needs stable regression evidence.
-- **Priority:** P1
-- **Risk:** Medium
-- **Dependencies:** F1 and F2.
-- **Completion criteria:** Synthetic or irreversibly sanitized fixtures cover
-  deposit and electronic-transaction sections, page boundaries, malformed files,
-  duplicates, parser limits, and unsupported rows; no real customer statement or
-  identifying financial data is committed.
-- **Blocks product work?** Yes — fixtures may be developed alongside the parser,
-  but must exist before the import feature is considered complete.
-- **Suggested GitHub issue?** Yes; may be part of the parser issue.
-
-#### F4. Implement Sunflower PDF import incrementally
-
-- **Goal:** Deliver upload, extraction, normalization, validation, duplicate
-  review, preview, confirmation, and persistence for the approved Sunflower PDF
-  scope.
-- **Why:** This is the next major product capability and the first consumer of
-  the import safety foundation.
-- **Priority:** Product priority
-- **Risk:** High
-- **Dependencies:** The current product critical path below.
-- **Completion criteria:** Split, independently reviewable issues satisfy F1–F3
-  and the approved pipeline; only user-confirmed valid transactions persist;
-  existing financial behavior remains protected; PostgreSQL integration tests
-  pass; no income or cash-flow semantics are introduced implicitly.
-- **Blocks product work?** This is the product work enabled by the blockers.
-- **Suggested GitHub issue?** Yes; use an epic/tracking issue plus small delivery
-  issues rather than one large PR.
-
-Support for Credit Union of Dodge City should be added only when a representative
-statement is available for safe fixture design and parser verification. Income
-and cash-flow behavior require their own explicit product-semantic decisions and
-must not be inferred from deposits during the initial Sunflower scope.
-
-## Current Product Critical Path — Sunflower Statement Import
-
-The minimum engineering sequence is:
-
-1. **Financial API characterization** — protect current expense and budget
-   contracts, authorization, ownership, and financial behavior.
-2. **Financial-domain decisions relevant to import** — approve amount, refund,
-   date, month, category, ownership, and persistence semantics that imported
-   records require.
-3. **Necessary write-boundary hardening** — add only the DTO, validation,
-   normalization, and database protections needed to persist confirmed imported
-   transactions safely.
-4. **PostgreSQL-backed financial verification** — verify migrations and the
-   database-dependent invariants used by import persistence.
-5. **Import threat model** — approve file, parser, resource, privacy, logging,
-   and retention boundaries before accepting uploads.
-6. **Normalized import pipeline specification** — approve the parse-through-
-   persist lifecycle, idempotency, duplicate, preview, error, fixture, and
-   transaction-commit policies.
-7. **Sunflower PDF import implementation** — deliver the approved scope through
-   small, independently reviewable issues and pull requests.
-
-Once steps 1–6 are complete, Sunflower PDF import may proceed even while other
-roadmap work remains open.
-
-Completion of unrelated authentication, observability, documentation,
-browser-testing, or cleanup roadmap work is not required before Sunflower import
-unless implementation reveals a concrete dependency.
+1. **First-class manual cash in** — let users record incoming money as naturally
+   as they record expenses.
+2. **Record paycheck received** — connect a saved paycheck expectation to an
+   actual observed inflow without inventing money on payday.
+3. **Recorded Activity coherence** — make money-in and money-out records easy to
+   review while preserving their distinct domain semantics.
+4. **Intelligence-assisted matching and recurrence** — reduce repeated entry with
+   explainable suggestions based on actual records.
+5. **Richer planning** — use trustworthy historical records plus clearly labeled
+   expectations for more useful budgeting and planning, with Safe-to-Spend or
+   balance features requiring separate semantics.
+6. **Catch-up/reconciliation improvements** — strengthen import and duplicate
+   handling as a secondary workflow.
+7. **Proactive automation** — reminders, automatic matching, or background
+   assistance only after semantics and verification justify the trust increase.
 
 ## Explicit Non-Goals
 
 The current roadmap does not call for premature introduction of:
 
+- automatic conversion of expected paychecks or commitments into historical
+  financial records;
+- automatic classification of arbitrary incoming money as income or paycheck;
+- Safe-to-Spend, canonical balance, or forecasted balance without separate
+  owner-approved semantics;
+- fuzzy or LLM-only financial classification without an explicit trustworthy
+  decision model;
 - microservices or independently deployed services without an observed boundary;
 - Kubernetes or distributed infrastructure without demonstrated scale needs;
 - CQRS or event sourcing;
@@ -553,12 +510,15 @@ not adopting enterprise mechanisms without the problems that justify them.
 Reconsider deferred architecture only when repository or production evidence
 supports it:
 
+- **Canonical balance/reconciliation:** users need bank-total reconciliation,
+  Safe-to-Spend, forecasted balances, or multi-account transfer handling.
 - **Distributed rate limiting or coordination:** the backend runs multiple
   replicas or process restarts materially undermine enforcement.
 - **Formal API versioning:** a second independently deployed client needs contract
   stability, or incompatible contracts must coexist.
-- **Background processing:** import or email work exceeds safe request lifetimes,
-  requires durable retries, or must continue after clients disconnect.
+- **Background processing:** import, notifications, matching, or email work
+  exceeds safe request lifetimes, requires durable retries, or must continue
+  after clients disconnect.
 - **Parser process isolation:** supported formats require complex/native parsers,
   or threat analysis or an incident demonstrates a containment need.
 - **Additional application layers:** multiple controllers, importers, or scheduled
@@ -576,8 +536,13 @@ supports it:
 Each implementation item should begin as a GitHub Issue with explicit scope,
 non-goals, risk, dependencies, and measurable acceptance criteria. `AGENTS.md`
 remains authoritative for inspection, planning and approval gates, verification,
-branch and pull-request handling, correction on an existing PR branch, and human
-merge authority.
+branch and pull-request handling, correction on an existing PR branch, and merge
+authority.
+
+`ROADMAP.md` communicates direction and engineering capability needs. It is not a
+product backlog and must not be used to choose work autonomously. If no active or
+explicitly authorized issue exists, return to product/planning mode with the
+owner.
 
 Roadmap items should normally become small independent pull requests. Updating
 this document does not authorize implementation, semantic changes, migrations,

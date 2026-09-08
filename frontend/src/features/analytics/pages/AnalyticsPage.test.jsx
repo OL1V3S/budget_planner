@@ -93,7 +93,7 @@ describe("monthly spending insights page", () => {
 
     expect(openDetail("Month-over-month change")).toHaveTextContent("+$25.00");
     expect(openDetail("Largest expenses")).toHaveTextContent("Groceries");
-    expect(screen.getByRole("link", { name: "Review transactions" })).toHaveAttribute("href", "/transactions");
+    expect(screen.getByRole("link", { name: "Review activity" })).toHaveAttribute("href", "/transactions");
   });
 
   it("keeps spending detail closed by default, keyboard reachable, and open across page state updates", () => {

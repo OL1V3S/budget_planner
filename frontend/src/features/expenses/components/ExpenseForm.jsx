@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { DEFAULT_CATEGORIES } from "../../../shared/constants/categories";
 import { displayText } from "../../../utils/text";
 import Card from "../../../shared/ui/Card";
@@ -20,14 +21,50 @@ export default function ExpenseForm({
   inputRef,
   pending = false,
 }) {
+  const formRef = useRef(null);
+  const [invalidField, setInvalidField] = useState("");
+
+  function firstMissingField() {
+    return [
+      ["description", newName],
+      ["amount", newAmount],
+      ["date", newDate],
+      ["category", newCategory],
+    ].find(([, value]) => !value)?.[0] ?? "";
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    const missingField = firstMissingField();
+    if (missingField) {
+      setInvalidField(missingField);
+      window.requestAnimationFrame(() => formRef.current?.elements.namedItem(missingField)?.focus());
+      return;
+    }
+    setInvalidField("");
+    onAdd();
+  }
+
+  function handleCancel() {
+    setInvalidField("");
+    onCancel();
+  }
+
   return (
     <Card as="section" className="section">
       <h2 className="h2">Add expense</h2>
-      <fieldset className="activity-form-fields" disabled={pending}>
-      <legend className="sr-only">New expense</legend>
-      <div className="form-grid">
+      <form ref={formRef} noValidate onSubmit={handleSubmit}
+        onChange={() => setInvalidField("")} aria-describedby={invalidField ? "add-expense-validation" : undefined}>
+        {invalidField && <p id="add-expense-validation" className="status-message status-message--danger" role="alert">Complete the required expense fields.</p>}
+        <fieldset className="activity-form-fields" disabled={pending}>
+        <legend className="sr-only">New expense</legend>
+        <div className="form-grid">
         <FormField label="Description">{(id) => <input id={id}
           ref={inputRef}
+          name="description"
+          required
+          aria-invalid={invalidField === "description"}
+          aria-describedby={invalidField === "description" ? "add-expense-validation" : undefined}
           placeholder="Description"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
@@ -35,6 +72,10 @@ export default function ExpenseForm({
 
         <FormField label="Amount">{(id) => <input id={id}
           type="number"
+          name="amount"
+          required
+          aria-invalid={invalidField === "amount"}
+          aria-describedby={invalidField === "amount" ? "add-expense-validation" : undefined}
           placeholder="Amount"
           value={newAmount}
           onChange={(e) => setNewAmount(e.target.value)}
@@ -44,11 +85,18 @@ export default function ExpenseForm({
 
         <FormField label="Date">{(id) => <input id={id}
           type="date"
+          name="date"
+          required
+          aria-invalid={invalidField === "date"}
+          aria-describedby={invalidField === "date" ? "add-expense-validation" : undefined}
           value={newDate}
           onChange={(e) => setNewDate(e.target.value)}
         />}</FormField>
 
-        <FormField label="Category">{(id) => <select id={id} value={newCategory} onChange={(e) => setNewCategory(e.target.value)}>
+        <FormField label="Category">{(id) => <select id={id} name="category" required
+          aria-invalid={invalidField === "category"}
+          aria-describedby={invalidField === "category" ? "add-expense-validation" : undefined}
+          value={newCategory} onChange={(e) => setNewCategory(e.target.value)}>
           <option value="">Category</option>
 
           {DEFAULT_CATEGORIES.map((c) => (
@@ -69,14 +117,15 @@ export default function ExpenseForm({
           />}</FormField>
         )}
 
-      </div>
-      </fieldset>
-      <div className="inline-actions activity-task-actions">
-        <button type="button" onClick={onAdd} disabled={loading || pending}>
-          {pending ? "Saving…" : "Save expense"}
-        </button>
-        <button type="button" className="button-ghost" onClick={onCancel} disabled={pending}>Cancel</button>
-      </div>
+        </div>
+        </fieldset>
+        <div className="inline-actions activity-task-actions">
+          <button type="submit" disabled={loading || pending}>
+            {pending ? "Saving…" : "Save expense"}
+          </button>
+          <button type="button" className="button-ghost" onClick={handleCancel} disabled={pending}>Cancel</button>
+        </div>
+      </form>
     </Card>
   );
 }

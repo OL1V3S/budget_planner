@@ -24,4 +24,19 @@ the permanent, complete archive.
 
 ## History
 
-No entries yet. This section remains empty until the UX V3 starting point above.
+### 2026-09-07 — Ordo UX V3
+
+[Issue #127](https://github.com/OL1V3S/ordo/issues/127) ·
+[PR #132](https://github.com/OL1V3S/ordo/pull/132),
+[PR #133](https://github.com/OL1V3S/ordo/pull/133),
+[PR #134](https://github.com/OL1V3S/ordo/pull/134),
+[PR #135](https://github.com/OL1V3S/ordo/pull/135),
+[PR #136](https://github.com/OL1V3S/ordo/pull/136),
+[PR #137](https://github.com/OL1V3S/ordo/pull/137)
+
+- Simplified Home, Activity/import, Budgets, Commitments, Paychecks, and Insights
+  around recorded figures, saved expectations, and explicit review tasks.
+- Added a consistent responsive shell, task-focused account-access pages,
+  expandable details/history, and quieter Plan, More, and Settings pages.
+- Improved focus, accessible control names, draft preservation, and distinct
+  loading/error states while preserving existing financial and account behavior.

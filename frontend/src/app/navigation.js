@@ -17,14 +17,14 @@ export const APP_DESTINATIONS = [
   { to: "/analytics", label: "Insights", icon: ChartNoAxesCombined },
   { to: "/commitments", label: "Commitments", icon: Repeat2, description: "Review recurring expenses and manage saved commitments." },
   { to: "/paychecks", label: "Paychecks", icon: WalletCards, description: "Review deposits and manage saved paycheck expectations." },
-  { to: "/investing", label: "Investing", icon: Landmark, description: "Unavailable today. View the planned investing workspace." },
-  { to: "/settings", label: "Settings", icon: Settings, description: "Review your account and theme preference." },
+  { to: "/investing", label: "Investing", icon: Landmark, description: "Planned for a future release." },
+  { to: "/settings", label: "Settings", icon: Settings, description: "Choose your theme and review your signed-in email." },
 ];
 
 export const PLAN_DESTINATIONS = APP_DESTINATIONS.filter(({ to }) =>
   ["/budgets", "/commitments", "/paychecks"].includes(to));
-export const MORE_DESTINATIONS = APP_DESTINATIONS.filter(({ to }) =>
-  ["/investing", "/settings"].includes(to));
+export const MORE_DESTINATIONS = ["/settings", "/investing"]
+  .map((to) => APP_DESTINATIONS.find((destination) => destination.to === to));
 
 export const MOBILE_DESTINATIONS = [
   { to: "/overview", label: "Home", icon: LayoutDashboard, paths: ["/overview"] },

@@ -23,7 +23,7 @@ const CONFIRMATION_CODE_MESSAGES = {
   category_reserved: "Choose a category other than Other.",
 };
 
-function RowFields({ row, draft, disabled, onDraftChange, onSave }) {
+function RowFields({ row, rowContext, draft, disabled, onDraftChange, onSave }) {
   if (!row.isEligible) return <span className="muted">Not editable</span>;
 
   const saveStatus = draft.pending
@@ -39,6 +39,7 @@ function RowFields({ row, draft, disabled, onDraftChange, onSave }) {
       <label>
         <span>Expense description</span>
         <input
+          aria-label={`Expense description for ${rowContext}`}
           value={draft.description}
           disabled={disabled || draft.pending}
           onChange={(event) => onDraftChange({ description: event.target.value })}
@@ -47,6 +48,7 @@ function RowFields({ row, draft, disabled, onDraftChange, onSave }) {
       <label>
         <span>Category</span>
         <select
+          aria-label={`Category for ${rowContext}`}
           value={draft.categoryChoice}
           disabled={disabled || draft.pending}
           onChange={(event) => onDraftChange({ categoryChoice: event.target.value })}
@@ -62,6 +64,7 @@ function RowFields({ row, draft, disabled, onDraftChange, onSave }) {
         <label>
           <span>Custom category</span>
           <input
+            aria-label={`Custom category for ${rowContext}`}
             value={draft.customCategory}
             disabled={disabled || draft.pending}
             onChange={(event) => onDraftChange({ customCategory: event.target.value })}
@@ -71,6 +74,7 @@ function RowFields({ row, draft, disabled, onDraftChange, onSave }) {
       <button
         type="button"
         className="button-ghost"
+        aria-label={`Save row for ${rowContext}`}
         disabled={disabled || draft.pending || !draft.dirty}
         onClick={onSave}
       >
@@ -133,13 +137,17 @@ export default function ImportPreviewRow({
   const isSelectable = row.isEligible || isInflow;
   const isSelected = row.isEligible ? row.selectedForImport : row.selectedForInflow;
   const sourceDescription = row.sourceDescription || "Unavailable";
-  const sourceDetailsLabel = row.sourceDescription
-    ? `Source details for ${row.sourceDescription}`
-    : `Source details for statement row ${row.sourceRowOrdinal}`;
+  const rowContext = `${sourceDescription} on ${row.postedDate ?? "unknown date"}, statement row ${row.sourceRowOrdinal}`;
+  const sourceDetailsLabel = `Source details for ${rowContext}`;
   const selection = (
     <label className="import-selection">
       <input
         type="checkbox"
+        aria-label={`${row.isEligible
+          ? "Select for import"
+          : isInflow
+            ? "Save incoming deposit"
+            : "Not selectable"} for ${rowContext}`}
         checked={Boolean(isSelected)}
         disabled={!isSelectable || disabled || draft.pending}
         onChange={(event) => onSelectionChange(event.target.checked)}
@@ -183,6 +191,7 @@ export default function ImportPreviewRow({
       <td className="import-preview-row__fields" data-label="Expense fields">
         <RowFields
           row={row}
+          rowContext={rowContext}
           draft={draft}
           disabled={disabled}
           onDraftChange={onDraftChange}

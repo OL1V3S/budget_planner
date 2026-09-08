@@ -4,13 +4,16 @@ import { useBudgetLimits } from "../hooks/useBudgetLimits";
 import { computeMonthlyTotalsByCategory } from "../utils/totalsByCategory";
 import { getMonthYear } from "../../../shared/utils/monthYear";
 import BudgetLimitsPanel from "../components/BudgetLimitsPanel";
+import "../../../styles/budgets.css";
 
 export default function BudgetsPage() {
-  const { expenses } = useExpenses();
+  const { expenses, loading: spendingLoading, error: spendingError, refresh: refreshSpending } = useExpenses();
   const [limitMonthYear, setLimitMonthYear] = useState(getMonthYear(new Date()));
   const {
     budgetLimits,
     loading: limitsLoading,
+    error: limitsError,
+    refresh: refreshLimits,
     upsertLimit,
     deleteLimit,
   } = useBudgetLimits(limitMonthYear);
@@ -21,12 +24,11 @@ export default function BudgetsPage() {
   );
 
   return (
-    <div className="container">
+    <div className="container budgets-page">
       <header className="page-header">
         <div>
-          <p className="page-header__eyebrow">Plan your spending</p>
           <h1>Budgets</h1>
-          <p className="muted">Set monthly category limits and track how much you have used.</p>
+          <p className="muted">See how your spending compares with each category limit.</p>
         </div>
       </header>
 
@@ -35,6 +37,11 @@ export default function BudgetsPage() {
         setLimitMonthYear={setLimitMonthYear}
         budgetLimits={budgetLimits}
         limitsLoading={limitsLoading}
+        limitsError={limitsError}
+        refreshLimits={refreshLimits}
+        spendingLoading={spendingLoading}
+        spendingError={spendingError}
+        refreshSpending={refreshSpending}
         totalsByCategory={totalsByCategory}
         upsertLimit={upsertLimit}
         deleteLimit={deleteLimit}

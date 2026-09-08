@@ -1,4 +1,5 @@
 import { formatDate, formatMoney } from "../utils/formatCommitments";
+import { displayText } from "../../../utils/text";
 
 function sourceLabel(source) {
   return source === "sunflower_pdf" ? "Sunflower statement" : "Manual entry";
@@ -13,7 +14,7 @@ export default function CommitmentEvidence({ evidence, heading = "Supporting exp
           <li key={expense.expenseId} className="commitment-evidence__item">
             <div>
               <strong>{expense.description}</strong>
-              <span>{formatDate(expense.date)} · {expense.category}</span>
+              <span>{formatDate(expense.date)} · {displayText(expense.category)}</span>
               <span>{sourceLabel(expense.source)}</span>
             </div>
             <strong>{formatMoney(expense.amount)}</strong>

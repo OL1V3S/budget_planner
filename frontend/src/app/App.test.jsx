@@ -167,7 +167,9 @@ describe('application routes and shell', () => {
       expect(within(link).getByText(label, { selector: 'span:not(.sr-only)' })).toBeInTheDocument()
     }
     const desktop = screen.getByRole('navigation', { name: 'Primary navigation' })
-    expect([...desktop.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual(['/overview', '/transactions', '/budgets', '/analytics', '/commitments', '/paychecks', '/investing'])
+    expect([...desktop.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual(['/overview', '/transactions', '/budgets', '/analytics', '/commitments', '/paychecks'])
+    const secondary = screen.getByRole('navigation', { name: 'Secondary navigation' })
+    expect([...secondary.querySelectorAll('a')].map((link) => link.getAttribute('href'))).toEqual(['/settings', '/investing'])
     expect(screen.getAllByRole('link', { name: /Settings/ })).toHaveLength(2)
   })
 

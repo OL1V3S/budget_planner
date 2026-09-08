@@ -78,6 +78,28 @@ describe('existing expense workflows', () => {
     })
   })
 
+  it.each([
+    ['-1', -1],
+    ['1.234', 1.234],
+    ['0', 0],
+  ])('preserves presence-only amount submission for %s', async (amountInput, expectedAmount) => {
+    const user = userEvent.setup()
+    const addExpense = vi.fn().mockResolvedValue(undefined)
+    useExpenses.mockReturnValue({ ...baseExpensesHook, addExpense })
+    render(<TransactionsPage />)
+    await user.click(screen.getByRole('button', { name: 'Add expense' }))
+    const addEntry = screen.getByRole('heading', { name: 'Add expense' }).closest('section')
+
+    await user.type(within(addEntry).getByLabelText('Description'), 'Synthetic amount')
+    fireEvent.change(within(addEntry).getByLabelText('Amount'), { target: { value: amountInput } })
+    fireEvent.change(within(addEntry).getByLabelText('Date'), { target: { value: '2026-08-14' } })
+    await user.selectOptions(within(addEntry).getByLabelText('Category'), 'food')
+    await user.click(within(addEntry).getByRole('button', { name: 'Save expense' }))
+
+    expect(addExpense).toHaveBeenCalledWith(expect.objectContaining({ amount: expectedAmount }))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it('uses the other sentinel to send a normalized custom category', async () => {
     const user = userEvent.setup()
     const addExpense = vi.fn().mockResolvedValue(undefined)
@@ -115,7 +137,7 @@ describe('existing expense workflows', () => {
     render(<TransactionsPage />)
 
     const row = screen.getByText('Medical').closest('tr')
-    await user.click(within(row).getByRole('button', { name: 'Edit' }))
+    await user.click(within(row).getByRole('button', { name: /^Edit expense old name/i }))
 
     expect(within(row).getByLabelText('Edit description')).toBeInTheDocument()
     expect(within(row).getByLabelText('Edit amount')).toBeInTheDocument()
@@ -166,14 +188,16 @@ describe('existing expense workflows', () => {
     expect(screen.getByRole('button', { name: 'Show More' })).toBeInTheDocument()
   })
 
-  it('keeps missing-field validation while using neutral copy', async () => {
+  it('shows inline missing-field validation and focuses the first invalid field', async () => {
     const user = userEvent.setup()
     render(<TransactionsPage />)
 
     await user.click(screen.getByRole('button', { name: 'Add expense' }))
     await user.click(screen.getByRole('button', { name: 'Save expense' }))
 
-    expect(window.alert).toHaveBeenCalledWith('Complete all transaction fields.')
+    expect(screen.getByRole('alert')).toHaveTextContent('Complete the required expense fields.')
+    await waitFor(() => expect(screen.getByLabelText('Description')).toHaveFocus())
+    expect(window.alert).not.toHaveBeenCalled()
     expect(baseExpensesHook.addExpense).not.toHaveBeenCalled()
   })
 
@@ -316,7 +340,7 @@ describe('existing expense workflows', () => {
 
     expect(refresh).toHaveBeenCalledOnce()
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'The import succeeded, but Transactions could not be refreshed'
+      'The import succeeded, but Activity could not be refreshed'
     )
   })
 
@@ -353,14 +377,14 @@ describe('existing expense workflows', () => {
     expect(within(table).getByText('Possible duplicate — review before selecting')).toBeInTheDocument()
     expect(within(table).getByText('Needs review')).toBeInTheDocument()
     expect(within(table).getByLabelText('Not selectable')).toBeDisabled()
-    await user.click(within(table).getByLabelText('Select for import'))
+    await user.click(within(table).getByLabelText(/^Select for import for /))
     expect(updateRow).toHaveBeenCalledWith('row-1', expect.objectContaining({ selectedForImport: true }))
 
-    const description = within(table).getByLabelText('Expense description')
+    const description = within(table).getByLabelText(/^Expense description for /)
     await user.clear(description)
     await user.type(description, 'Morning coffee')
-    await user.selectOptions(within(table).getByLabelText('Category'), 'food')
-    await user.click(within(table).getByRole('button', { name: 'Save row' }))
+    await user.selectOptions(within(table).getByLabelText(/^Category for /), 'food')
+    await user.click(within(table).getByRole('button', { name: /^Save row for / }))
     expect(updateRow).toHaveBeenLastCalledWith('row-1', {
       editableExpenseDescription: 'Morning coffee',
       category: 'food',
@@ -426,7 +450,7 @@ describe('Activity task hierarchy and safeguards', () => {
   it('pins an active edit through filters and failed reads without replacing the draft', async () => {
     const user = userEvent.setup()
     const { rerender } = render(<TransactionsPage />)
-    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    await user.click(screen.getByRole('button', { name: /^Edit expense/ }))
     await user.clear(screen.getByLabelText('Edit description'))
     await user.type(screen.getByLabelText('Edit description'), 'Unsaved description')
     await user.type(screen.getByRole('searchbox'), 'not a match')
@@ -443,11 +467,23 @@ describe('Activity task hierarchy and safeguards', () => {
     const user = userEvent.setup()
     useExpenses.mockReturnValue({ ...baseExpensesHook, expenses: [expense, { ...expense, id: 43, description: 'Other' }] })
     render(<TransactionsPage />)
-    await user.click(screen.getAllByRole('button', { name: 'Edit' })[0])
+    await user.click(screen.getAllByRole('button', { name: /^Edit expense/ })[0])
     await user.type(screen.getByLabelText('Edit description'), ' draft')
-    expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Edit expense/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Delete expense/ })).toBeDisabled()
     expect(screen.getByLabelText('Edit description')).toHaveValue('Synthetic coffee draft')
+  })
+  it('gives repeated expense actions unique names while keeping their visible copy', () => {
+    useExpenses.mockReturnValue({
+      ...baseExpensesHook,
+      expenses: [expense, { ...expense, id: 43 }],
+    })
+    render(<TransactionsPage />)
+
+    expect(screen.getByRole('button', { name: 'Edit expense Synthetic Coffee from 09/01/2026, row 1' })).toHaveTextContent('Edit')
+    expect(screen.getByRole('button', { name: 'Edit expense Synthetic Coffee from 09/01/2026, row 2' })).toHaveTextContent('Edit')
+    expect(screen.getByRole('button', { name: 'Delete expense Synthetic Coffee from 09/01/2026, row 1' })).toHaveTextContent('Delete')
+    expect(screen.getByRole('button', { name: 'Delete expense Synthetic Coffee from 09/01/2026, row 2' })).toHaveTextContent('Delete')
   })
   it('locks a pending save and keeps the task visible until the write completes', async () => {
     const user = userEvent.setup()
@@ -506,9 +542,9 @@ describe('Activity task hierarchy and safeguards', () => {
     const deleteExpense = vi.fn().mockResolvedValue({ refreshFailed: false })
     useExpenses.mockReturnValue({ ...baseExpensesHook, expenses: [expense], deleteExpense })
     render(<TransactionsPage />)
-    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    await user.click(screen.getByRole('button', { name: /^Delete expense/ }))
     expect(deleteExpense).not.toHaveBeenCalled()
-    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    await user.click(screen.getByRole('button', { name: /^Delete expense/ }))
     expect(confirm).toHaveBeenCalledWith('Delete this expense?')
     expect(deleteExpense).toHaveBeenCalledExactlyOnceWith(42)
     expect(screen.getByRole('status')).toHaveTextContent('Expense deleted.')

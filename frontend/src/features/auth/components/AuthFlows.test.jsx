@@ -35,7 +35,7 @@ describe('existing authentication flows', () => {
     authApi.login.mockResolvedValue({ data: { token: 'jwt-value', email: 'person@example.com' } })
     renderAt(<AuthPage onLogin={onLogin} />)
 
-    expect(screen.getByRole('heading', { name: 'Log in', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Log in', level: 1 })).toHaveFocus()
     expect(screen.getByText('ordo')).not.toHaveRole('heading')
     expect(screen.getByText('Email', { selector: 'label' })).toBeVisible()
     expect(screen.getByText('Password', { selector: 'label' })).toBeVisible()
@@ -100,7 +100,7 @@ describe('existing authentication flows', () => {
     renderAt(<AuthPage onLogin={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: 'Need an account? Register' }))
-    expect(screen.getByRole('heading', { name: 'Create account', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Create account', level: 1 })).toHaveFocus()
     expect(screen.getByText('Confirm password', { selector: 'label' })).toBeVisible()
     expect(screen.getByLabelText('Confirm password')).toBe(screen.getByPlaceholderText('Confirm Password'))
     await user.type(screen.getByPlaceholderText('Email'), 'person@example.com')
@@ -123,7 +123,7 @@ describe('existing authentication flows', () => {
       userId: 'user-123',
       token: 'a+b_c',
     }))
-    expect(await screen.findByRole('heading', { name: 'Email confirmed', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Email confirmed', level: 1 })).toHaveFocus()
     expect(screen.getByRole('status')).toHaveTextContent('You can now log in.')
   })
 
@@ -139,7 +139,7 @@ describe('existing authentication flows', () => {
     authApi.resetPassword.mockResolvedValue({ data: { message: 'ok' } })
     renderAt(<ResetPasswordPage />, '/reset-password?email=person%40example.com&token=reset%2Btoken')
 
-    expect(screen.getByRole('heading', { name: 'Reset password', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Reset password', level: 1 })).toHaveFocus()
     expect(screen.getByText('New password', { selector: 'label' })).toBeVisible()
     expect(screen.getByLabelText('New password')).toBe(screen.getByPlaceholderText('New password'))
     await user.type(screen.getByPlaceholderText('New password'), 'NewSecret1!')
@@ -159,7 +159,7 @@ describe('existing authentication flows', () => {
     })
     renderAt(<ForgotPasswordPage />, '/forgot-password')
 
-    expect(screen.getByRole('heading', { name: 'Forgot password', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Forgot password', level: 1 })).toHaveFocus()
     expect(screen.getByText('Email', { selector: 'label' })).toBeVisible()
     expect(screen.getByLabelText('Email')).toBe(screen.getByPlaceholderText('Email'))
     await user.type(screen.getByPlaceholderText('Email'), 'unknown@example.com')
@@ -258,7 +258,7 @@ describe('existing authentication flows', () => {
       email: 'person@example.com',
       password: 'Secret1!',
     }))
-    expect(await screen.findByRole('heading', { name: 'Check your email', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Check your email', level: 1 })).toHaveFocus()
     expect(screen.getByRole('status')).toHaveTextContent('A confirmation link was sent to person@example.com.')
     expect(screen.getByText('person@example.com', { selector: 'strong' })).toBeVisible()
     expect(onLogin).not.toHaveBeenCalled()

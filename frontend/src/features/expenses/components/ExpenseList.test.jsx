@@ -49,15 +49,17 @@ describe("ExpenseList", () => {
     expect(within(tableRegion).getByText("Expenses", { selector: "caption" })).toBeInTheDocument();
     expect(row.querySelector('[data-label="Amount ($)"]')).toHaveTextContent("4.50");
 
-    const editButton = within(row).getByRole("button", { name: "Edit" });
+    const editButton = within(row).getByRole("button", {
+      name: "Edit expense Coffee from 08/14/2026, row 1",
+    });
     await user.click(editButton);
     expect(onStartEdit).toHaveBeenCalledWith(expense, editButton);
   });
 
   it("locks other row actions and keeps an unavailable read draft cancelable", () => {
     const { rerender } = render(<ExpenseList {...listProps({ taskLocked: true })} />);
-    expect(screen.getByRole("button", { name: "Edit" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Edit expense Coffee from 08/14/2026, row 1" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete expense Coffee from 08/14/2026, row 1" })).toBeDisabled();
 
     rerender(<ExpenseList {...listProps({ editingExpenseId: 7, readUnavailable: true })} />);
     expect(screen.getByLabelText("Edit description")).toHaveFocus();

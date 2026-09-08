@@ -1,9 +1,10 @@
 import { Landmark } from "lucide-react";
 import Card from "../../shared/ui/Card";
+import "../../styles/secondary-pages.css";
 
 export default function InvestingPage() {
   return (
-    <div className="shell-page">
+    <div className="shell-page investing-page">
       <header className="page-header">
         <div>
           <p className="page-header__eyebrow">Investing</p>

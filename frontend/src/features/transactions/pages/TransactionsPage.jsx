@@ -128,10 +128,6 @@ export default function TransactionsPage() {
     }
   }
   async function handleAddExpense() {
-    if (!newName || !newAmount || !newDate || !newCategory) {
-      alert("Complete all transaction fields.");
-      return;
-    }
     const categoryToUse = newCategory === "other"
       ? normalizeText(customCategory || "uncategorized") : normalizeText(newCategory);
     await writeExpense(() => addExpense({

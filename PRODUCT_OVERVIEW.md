@@ -25,9 +25,11 @@ silently treating every detected pattern as a financial fact.
   90% used, active commitments, and recent spending, with links to each workflow.
   Each section shows its own loading or retry state when a read is unavailable.
 - **Activity / Transactions:** Scan recorded spending first, search descriptions
-  and categories, and expand date/category filters when needed. Open Add expense
-  or Import statement to start a task; edit and delete remain available on each
-  record. Active drafts and import review stay visible while you work.
+  and categories, and expand date/category filters when needed. A separate Cash in
+  section lists recorded incoming money with its own search. Add, edit, or delete
+  expenses and cash in, or open Import statement. Cash-in edits and deletions can
+  affect imported records and supporting paycheck links; visible warnings explain
+  these effects. Active drafts and import review stay visible while you work.
 - **Budgets:** Review category spending against the selected month’s limits,
   with visible progress and near-limit or over-limit status. Open add or edit
   when needed; drafts keep their original month. Zero limits remain explicit
@@ -93,7 +95,7 @@ boundaries in more detail.
 ## Current shape and maturity
 
 Ordo is an evolving product focused on recorded activity and explicit review.
-It currently models one checking account, with manual expense entry and supported
+It currently models one checking account, with manual expense and cash-in entry and supported
 statement import rather than a live bank connection. Investing is an unavailable
 placeholder, not a portfolio or investment-analysis feature.
 

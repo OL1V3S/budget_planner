@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import ImportPreviewPanel from './ImportPreviewPanel'
@@ -361,5 +361,149 @@ describe('ImportPreviewPanel confirmation safety', () => {
       selectedForImport: false,
       selectedForInflow: true,
     })
+  })
+
+  it('renders every statement mutation control locked during an external cash-in task', () => {
+    const { rerender } = render(<ImportPreviewPanel
+      importState={importState({ preview: null, sourceType: 'sunflower_pdf', selectedCount: 0 })}
+      externalLocked
+    />)
+
+    expect(screen.getByLabelText('Bank')).toBeDisabled()
+    expect(screen.getByLabelText('Sunflower statement PDF')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Choose PDF' })).toBeDisabled()
+
+    rerender(<ImportPreviewPanel importState={importState()} externalLocked />)
+    expect(screen.getByRole('button', { name: 'Choose another statement' })).toBeDisabled()
+    expect(within(tableRegion()).getByLabelText(/^Expense description for /)).toBeDisabled()
+    expect(within(tableRegion()).getByLabelText(/^Category for /)).toBeDisabled()
+    expect(within(tableRegion()).getByLabelText(/^Select for import for /)).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save 1 expense and 0 incoming deposits' })).toBeDisabled()
+    expect(screen.getByText('Finish the cash-in task before changing the statement.')).toBeInTheDocument()
+  })
+
+  it('rechecks the external lock inside source, upload, and drop handlers', () => {
+    let locked = false
+    const file = new File(['statement'], 'statement.pdf', { type: 'application/pdf' })
+    const state = importState({ preview: null, sourceType: 'sunflower_pdf', selectedCount: 0 })
+    const { container } = render(
+      <ImportPreviewPanel importState={state} isExternallyLocked={() => locked} />,
+    )
+
+    locked = true
+    fireEvent.change(screen.getByLabelText('Bank'), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText('Sunflower statement PDF'), { target: { files: [file] } })
+    fireEvent.drop(container.querySelector('.import-dropzone'), { dataTransfer: { files: [file] } })
+
+    expect(state.selectSource).not.toHaveBeenCalled()
+    expect(state.upload).not.toHaveBeenCalled()
+  })
+
+  it('rechecks the external lock inside row, selection, replacement, and confirmation handlers', async () => {
+    let locked = false
+    const state = importState()
+    const { unmount } = render(
+      <ImportPreviewPanel importState={state} isExternallyLocked={() => locked} />,
+    )
+    const description = within(tableRegion()).getByLabelText(/^Expense description for /)
+
+    fireEvent.change(description, { target: { value: 'Dirty before lock' } })
+    expect(description).toHaveValue('Dirty before lock')
+    locked = true
+    fireEvent.change(description, { target: { value: 'Blocked edit' } })
+    fireEvent.click(within(tableRegion()).getByRole('button', { name: /^Save row for / }))
+    fireEvent.click(within(tableRegion()).getByLabelText(/^Select for import for /))
+    expect(description).toHaveValue('Dirty before lock')
+    expect(state.updateRow).not.toHaveBeenCalled()
+
+    unmount()
+    locked = false
+    const guardedState = importState()
+    render(<ImportPreviewPanel importState={guardedState} isExternallyLocked={() => locked} />)
+    locked = true
+    fireEvent.click(screen.getByRole('button', { name: 'Choose another statement' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save 1 expense and 0 incoming deposits' }))
+    expect(guardedState.clearForReupload).not.toHaveBeenCalled()
+    expect(guardedState.confirm).not.toHaveBeenCalled()
+  })
+
+  it('passes credit-only and already-confirmed result counts to the refresh callback', async () => {
+    const user = userEvent.setup()
+    const credit = {
+      ...row,
+      rowId: 'credit-only',
+      direction: 'credit',
+      classification: 'non_expense',
+      sourceDescription: 'SYNTHETIC DEPOSIT',
+      isEligible: false,
+      isInflowEligible: true,
+      editableExpenseDescription: null,
+      category: null,
+      selectedForImport: false,
+      selectedForInflow: true,
+    }
+    const creditResult = {
+      batchId: preview.batchId,
+      status: 'confirmed',
+      confirmedAt: '2026-08-25T21:00:00Z',
+      importedExpenseCount: 0,
+      importedInflowCount: 1,
+    }
+    const creditCallback = vi.fn().mockResolvedValue(undefined)
+    const { unmount } = render(<ImportPreviewPanel
+      importState={importState({
+        preview: { ...preview, rows: [credit] },
+        selectedCount: 1,
+        confirm: vi.fn().mockResolvedValue(creditResult),
+      })}
+      onImportConfirmed={creditCallback}
+    />)
+
+    await user.click(screen.getByRole('button', { name: 'Save 0 expenses and 1 incoming deposit' }))
+    expect(creditCallback).toHaveBeenCalledWith(creditResult)
+
+    unmount()
+    const alreadyConfirmedResult = {
+      ...creditResult,
+      status: 'already_confirmed',
+      importedExpenseCount: 1,
+      importedInflowCount: 0,
+    }
+    const alreadyConfirmedCallback = vi.fn().mockResolvedValue(undefined)
+    render(<ImportPreviewPanel
+      importState={importState({ confirm: vi.fn().mockResolvedValue(alreadyConfirmedResult) })}
+      onImportConfirmed={alreadyConfirmedCallback}
+    />)
+
+    await user.click(screen.getByRole('button', { name: 'Save 1 expense and 0 incoming deposits' }))
+    expect(alreadyConfirmedCallback).toHaveBeenCalledWith(alreadyConfirmedResult)
+  })
+
+  it('keeps the completed import visible when one affected list refresh fails', async () => {
+    const user = userEvent.setup()
+    const result = {
+      batchId: preview.batchId,
+      status: 'confirmed',
+      confirmedAt: '2026-08-25T21:00:00Z',
+      importedExpenseCount: 1,
+      importedInflowCount: 1,
+    }
+    const onImportConfirmed = vi.fn().mockResolvedValue({ failedLists: ['cash in'] })
+    const state = importState({ confirm: vi.fn().mockResolvedValue(result) })
+    const { rerender } = render(
+      <ImportPreviewPanel importState={state} onImportConfirmed={onImportConfirmed} />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Save 1 expense and 0 incoming deposits' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('The import succeeded, but Activity could not be refreshed for cash in')
+    expect(onImportConfirmed).toHaveBeenCalledWith(result)
+
+    rerender(<ImportPreviewPanel
+      importState={importState({ preview: null, selectedCount: 0, confirmation: result })}
+      onImportConfirmed={onImportConfirmed}
+    />)
+    expect(screen.getByRole('heading', { name: 'Import complete' })).toBeInTheDocument()
+    expect(screen.getByText(/1 expense and 1 incoming deposit saved/)).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('The import succeeded')
   })
 })

@@ -139,6 +139,63 @@ public sealed class PostgreSqlCashFlowTests
     }
 
     [PostgreSqlFact]
+    public async Task Manual_inflow_http_crud_updates_historical_cash_flow_by_current_amount_and_date()
+    {
+        await using var app = new PostgreSqlFinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("cash-flow-manual-crud@example.com");
+
+        using var created = await owner.Client.PostAsJsonAsync("/api/inflows", new
+        {
+            description = "  Manual deposit  ",
+            amount = 1200.25m,
+            date = "2026-09-03"
+        });
+        var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var id = createdBody.GetProperty("id").GetInt32();
+
+        var afterCreate = await ReadAsync(owner.Client);
+        var septemberAfterCreate = afterCreate.GetProperty("selected");
+        Assert.Equal("120025", Money(septemberAfterCreate, "cashInMinor"));
+        Assert.Equal("0", Money(septemberAfterCreate, "paycheckCashInMinor"));
+        Assert.Equal("120025", Money(septemberAfterCreate, "otherCashInMinor"));
+        Assert.Equal("120025", Money(septemberAfterCreate, "netMinor"));
+        Assert.Equal(1, septemberAfterCreate.GetProperty("inflowCount").GetInt32());
+
+        using var updated = await owner.Client.PutAsJsonAsync($"/api/inflows/{id}", new
+        {
+            id,
+            description = "Manual deposit corrected",
+            amount = 1300.27m,
+            date = "2026-08-31"
+        });
+        Assert.Equal(HttpStatusCode.NoContent, updated.StatusCode);
+
+        var afterUpdate = await ReadAsync(owner.Client);
+        var septemberAfterUpdate = afterUpdate.GetProperty("selected");
+        Assert.Equal("0", Money(septemberAfterUpdate, "cashInMinor"));
+        Assert.Equal("0", Money(septemberAfterUpdate, "netMinor"));
+        Assert.Equal(0, septemberAfterUpdate.GetProperty("inflowCount").GetInt32());
+        var august = Assert.Single(afterUpdate.GetProperty("months").EnumerateArray(),
+            value => value.GetProperty("month").GetString() == "2026-08");
+        Assert.Equal("130027", Money(august, "cashInMinor"));
+        Assert.Equal("130027", Money(august, "otherCashInMinor"));
+        Assert.Equal(1, august.GetProperty("inflowCount").GetInt32());
+
+        using var deleted = await owner.Client.DeleteAsync($"/api/inflows/{id}");
+        Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
+
+        var afterDelete = await ReadAsync(owner.Client);
+        Assert.All(afterDelete.GetProperty("months").EnumerateArray(), month =>
+        {
+            Assert.Equal("0", Money(month, "cashInMinor"));
+            Assert.Equal(0, month.GetProperty("inflowCount").GetInt32());
+        });
+        Assert.Equal(["2026-09"],
+            afterDelete.GetProperty("availableMonths").EnumerateArray().Select(value => value.GetString()));
+    }
+
+    [PostgreSqlFact]
     public async Task Concurrent_membership_and_record_edits_use_one_read_only_repeatable_snapshot()
     {
         var gate = new SnapshotGate();

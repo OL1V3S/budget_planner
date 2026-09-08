@@ -2,8 +2,12 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TransactionsPage from './TransactionsPage'
+import { useInflows } from '../../inflows/hooks/useInflows'
 import { useExpenses } from '../../expenses/hooks/useExpenses'
 import { useImportPreview } from '../../importPreview/hooks/useImportPreview'
+
+vi.mock('../../inflows/hooks/useInflows', () => ({ useInflows: vi.fn() }))
+beforeEach(() => { useInflows.mockReturnValue({ inflows: [], loading: false, error: null, refresh: vi.fn().mockResolvedValue({ stale: false }), createInflow: vi.fn(), updateInflow: vi.fn(), deleteInflow: vi.fn() }) })
 
 vi.mock('../../expenses/hooks/useExpenses', () => ({ useExpenses: vi.fn() }))
 vi.mock('../../importPreview/hooks/useImportPreview', () => ({ useImportPreview: vi.fn() }))
@@ -47,6 +51,35 @@ const selectedImportPreview = {
     isPossibleDuplicate: false, editableExpenseDescription: 'Coffee', category: 'food',
     selectedForImport: true,
   }],
+}
+
+function creditImportRow() {
+  return {
+    ...selectedImportPreview.rows[0],
+    rowId: 'row-credit',
+    sourceRowOrdinal: 2,
+    direction: 'credit',
+    sourceDescription: 'SYNTHETIC DEPOSIT',
+    classification: 'non_expense',
+    isEligible: false,
+    isInflowEligible: true,
+    isPossibleInflowDuplicate: false,
+    editableExpenseDescription: null,
+    category: null,
+    selectedForImport: false,
+    selectedForInflow: true,
+  }
+}
+
+function importResult(overrides = {}) {
+  return {
+    batchId: selectedImportPreview.batchId,
+    status: 'confirmed',
+    confirmedAt: '2026-08-25T21:00:00Z',
+    importedExpenseCount: 0,
+    importedInflowCount: 1,
+    ...overrides,
+  }
 }
 
 describe('existing expense workflows', () => {
@@ -316,6 +349,124 @@ describe('existing expense workflows', () => {
     expect(refresh).toHaveBeenCalledOnce()
   })
 
+  it('refreshes only cash in after a credit-only import', async () => {
+    const user = userEvent.setup()
+    const refreshExpenses = vi.fn().mockResolvedValue(undefined)
+    const refreshCash = vi.fn().mockResolvedValue({ stale: false })
+    const result = importResult()
+    useExpenses.mockReturnValue({ ...baseExpensesHook, refresh: refreshExpenses })
+    useInflows.mockReturnValue({
+      inflows: [], loading: false, error: null, refresh: refreshCash,
+      createInflow: vi.fn(), updateInflow: vi.fn(), deleteInflow: vi.fn(),
+    })
+    useImportPreview.mockReturnValue({
+      ...baseImportHook,
+      preview: { ...selectedImportPreview, rows: [creditImportRow()] },
+      sourceType: 'sunflower_pdf',
+      selectedCount: 1,
+      confirm: vi.fn().mockResolvedValue(result),
+    })
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Save 0 expenses and 1 incoming deposit' }))
+
+    expect(refreshCash).toHaveBeenCalledOnce()
+    expect(refreshExpenses).not.toHaveBeenCalled()
+  })
+
+  it('refreshes both affected lists after a mixed import', async () => {
+    const user = userEvent.setup()
+    const refreshExpenses = vi.fn().mockResolvedValue(undefined)
+    const refreshCash = vi.fn().mockResolvedValue({ stale: false })
+    const result = importResult({ importedExpenseCount: 1 })
+    useExpenses.mockReturnValue({ ...baseExpensesHook, refresh: refreshExpenses })
+    useInflows.mockReturnValue({
+      inflows: [], loading: false, error: null, refresh: refreshCash,
+      createInflow: vi.fn(), updateInflow: vi.fn(), deleteInflow: vi.fn(),
+    })
+    useImportPreview.mockReturnValue({
+      ...baseImportHook,
+      preview: { ...selectedImportPreview, rows: [selectedImportPreview.rows[0], creditImportRow()] },
+      sourceType: 'sunflower_pdf',
+      selectedCount: 2,
+      confirm: vi.fn().mockResolvedValue(result),
+    })
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Save 1 expense and 1 incoming deposit' }))
+
+    expect(refreshExpenses).toHaveBeenCalledOnce()
+    expect(refreshCash).toHaveBeenCalledOnce()
+  })
+
+  it('uses the returned credit count for an already-confirmed import', async () => {
+    const user = userEvent.setup()
+    const refreshExpenses = vi.fn().mockResolvedValue(undefined)
+    const refreshCash = vi.fn().mockResolvedValue({ stale: false })
+    const result = importResult({ status: 'already_confirmed' })
+    useExpenses.mockReturnValue({ ...baseExpensesHook, refresh: refreshExpenses })
+    useInflows.mockReturnValue({
+      inflows: [], loading: false, error: null, refresh: refreshCash,
+      createInflow: vi.fn(), updateInflow: vi.fn(), deleteInflow: vi.fn(),
+    })
+    useImportPreview.mockReturnValue({
+      ...baseImportHook,
+      preview: { ...selectedImportPreview, rows: [creditImportRow()] },
+      sourceType: 'sunflower_pdf',
+      selectedCount: 1,
+      confirm: vi.fn().mockResolvedValue(result),
+    })
+    render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Save 0 expenses and 1 incoming deposit' }))
+
+    expect(refreshCash).toHaveBeenCalledOnce()
+    expect(refreshExpenses).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['cash in', false, true],
+    ['expenses', true, false],
+  ])('preserves mixed import success when the %s refresh fails', async (failedList, expenseFails, cashFails) => {
+    const user = userEvent.setup()
+    const refreshExpenses = vi.fn()[expenseFails ? 'mockRejectedValue' : 'mockResolvedValue'](
+      expenseFails ? new Error('expenses offline') : undefined,
+    )
+    const refreshCash = vi.fn()[cashFails ? 'mockRejectedValue' : 'mockResolvedValue'](
+      cashFails ? new Error('cash in offline') : { stale: false },
+    )
+    const result = importResult({ importedExpenseCount: 1 })
+    const confirm = vi.fn().mockResolvedValue(result)
+    useExpenses.mockReturnValue({ ...baseExpensesHook, refresh: refreshExpenses })
+    useInflows.mockReturnValue({
+      inflows: [], loading: false, error: null, refresh: refreshCash,
+      createInflow: vi.fn(), updateInflow: vi.fn(), deleteInflow: vi.fn(),
+    })
+    useImportPreview.mockReturnValue({
+      ...baseImportHook,
+      preview: { ...selectedImportPreview, rows: [selectedImportPreview.rows[0], creditImportRow()] },
+      sourceType: 'sunflower_pdf',
+      selectedCount: 2,
+      confirm,
+    })
+    const { rerender } = render(<TransactionsPage />)
+
+    await user.click(screen.getByRole('button', { name: 'Save 1 expense and 1 incoming deposit' }))
+
+    expect(refreshExpenses).toHaveBeenCalledOnce()
+    expect(refreshCash).toHaveBeenCalledOnce()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      `The import succeeded, but Activity could not be refreshed for ${failedList}`,
+    )
+
+    useImportPreview.mockReturnValue({ ...baseImportHook, confirmation: result })
+    rerender(<TransactionsPage />)
+    expect(screen.getByRole('heading', { name: 'Import complete' })).toBeInTheDocument()
+    expect(screen.getByText(/1 expense and 1 incoming deposit saved/)).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('The import succeeded')
+  })
+
   it('surfaces the established warning when post-confirmation Expense refresh fails', async () => {
     const user = userEvent.setup()
     const refresh = vi.fn().mockRejectedValue(new Error('offline'))
@@ -441,7 +592,7 @@ describe('Activity task hierarchy and safeguards', () => {
   it('distinguishes no matches and resets all filters with a visible clear action', async () => {
     const user = userEvent.setup()
     render(<TransactionsPage />)
-    await user.type(screen.getByRole('searchbox'), 'missing')
+    await user.type(within(screen.getByRole('region', { name: 'Spending activity' })).getByRole('searchbox'), 'missing')
     expect(screen.getByText('No expenses match these filters.')).toBeVisible()
     expect(screen.queryByText('No expenses recorded yet.')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
@@ -453,7 +604,7 @@ describe('Activity task hierarchy and safeguards', () => {
     await user.click(screen.getByRole('button', { name: /^Edit expense/ }))
     await user.clear(screen.getByLabelText('Edit description'))
     await user.type(screen.getByLabelText('Edit description'), 'Unsaved description')
-    await user.type(screen.getByRole('searchbox'), 'not a match')
+    await user.type(within(screen.getByRole('region', { name: 'Spending activity' })).getByRole('searchbox'), 'not a match')
     expect(screen.getByLabelText('Edit description')).toHaveValue('Unsaved description')
     useExpenses.mockReturnValue({ ...baseExpensesHook, expenses: [], error: new Error('offline') })
     rerender(<TransactionsPage />)

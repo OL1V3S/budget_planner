@@ -50,7 +50,8 @@ function focusAfterRender(ref) {
   else window.setTimeout(focus, 0);
 }
 
-export default function ImportPreviewPanel({ importState, onImportConfirmed = async () => {} }) {
+export default function ImportPreviewPanel({ importState, onImportConfirmed = async () => {}, externalLocked = false, isExternallyLocked = () => false }) {
+  const externallyBlocked = () => externalLocked || isExternallyLocked();
   const {
     preview,
     sourceType,
@@ -95,7 +96,7 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
   }, [confirmation]);
 
   async function submitFile(file) {
-    if (!file || !sourceType) return;
+    if (externallyBlocked() || !file || !sourceType) return;
     setRefreshError("");
     const result = await upload(file);
     if (result) focusAfterRender(resultsHeading);
@@ -115,6 +116,7 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
   }
 
   function changeDraft(row, changes) {
+    if (externallyBlocked()) return;
     setRowDrafts((current) => {
       const sameBatch = current.batchId === preview?.batchId;
       const existing = sameBatch && current.rows[row.rowId]
@@ -177,7 +179,7 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
   }
 
   async function runRowUpdate(row, payload, savedFields) {
-    if (confirming || confirmationIssue?.requiresPreviewRefresh || rowUpdatesInFlight.current.has(row.rowId)) return null;
+    if (externallyBlocked() || confirming || confirmationIssue?.requiresPreviewRefresh || rowUpdatesInFlight.current.has(row.rowId)) return null;
     rowUpdatesInFlight.current.add(row.rowId);
     markRowPending(row);
     try {
@@ -216,14 +218,14 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
   const hasPendingRows = drafts.some((draft) => draft.pending);
   const hasDirtyRows = drafts.some((draft) => draft.dirty);
   const confirmationNeedsRefresh = Boolean(confirmationIssue?.requiresPreviewRefresh);
-  const confirmDisabled = selectedCount === 0
+  const confirmDisabled = externalLocked || selectedCount === 0
     || hasPendingRows
     || hasDirtyRows
     || confirming
     || confirmationNeedsRefresh;
 
   async function handleConfirm() {
-    if (confirmDisabled || rowUpdatesInFlight.current.size > 0) return;
+    if (externallyBlocked() || confirmDisabled || rowUpdatesInFlight.current.size > 0) return;
     setRefreshError("");
     const result = await confirm();
     if (!result) {
@@ -233,9 +235,13 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
 
     focusAfterRender(completionHeading);
     try {
-      if (result.importedExpenseCount > 0) await onImportConfirmed();
+      if (result.importedExpenseCount > 0 || result.importedInflowCount > 0) {
+        const refreshed = await onImportConfirmed(result);
+        const failed = refreshed?.failedLists?.filter((name) => ["expenses", "cash in"].includes(name)) ?? [];
+        if (failed.length) setRefreshError(`The import succeeded, but Activity could not be refreshed for ${failed.join(" and ")}. Use the affected list’s refresh action to see the saved records.`);
+      }
     } catch {
-      setRefreshError("The import succeeded, but Activity could not be refreshed. Reload this page to see imported expenses.");
+      setRefreshError("The import succeeded, but Activity could not be refreshed. Reload this page to see imported records.");
     }
   }
 
@@ -244,6 +250,7 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
   const selectedItemsLabel = formatSelectionCounts(selectedExpenseCount, selectedInflowCount);
 
   function confirmationGuidance() {
+    if (externalLocked) return "Finish the cash-in task before changing the statement.";
     if (confirmationNeedsRefresh) return "Refresh this page to load the authoritative duplicate review before confirming.";
     if (hasPendingRows) return "Wait for every row update to finish before confirming.";
     if (hasDirtyRows) return "Save every row with unsaved changes before confirming.";
@@ -262,7 +269,7 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
         row={row}
         draft={draftFor(row)}
         confirmationCodes={confirmationCodesFor(row.rowId)}
-        disabled={confirming || confirmationNeedsRefresh}
+        disabled={externalLocked || confirming || confirmationNeedsRefresh}
         onDraftChange={(changes) => changeDraft(row, changes)}
         onSave={() => saveRow(row)}
         onSelectionChange={(selected) => updateSelection(row, selected)}
@@ -284,8 +291,8 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
           <button
             type="button"
             className="button-ghost"
-            disabled={confirming || hasPendingRows || hasDirtyRows}
-            onClick={clearForReupload}
+            disabled={externalLocked || confirming || hasPendingRows || hasDirtyRows}
+            onClick={() => { if (!externallyBlocked()) clearForReupload(); }}
           >
             Choose another statement
           </button>
@@ -321,8 +328,9 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
           id="statement-source"
           required
           value={sourceType}
-          disabled={processing || confirming || Boolean(preview)}
+          disabled={externalLocked || processing || confirming || Boolean(preview)}
           onChange={(event) => {
+            if (externallyBlocked()) return;
             setRefreshError("");
             selectSource(event.target.value);
           }}
@@ -343,7 +351,7 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
       {(loading || processing) && (
         <div className="import-processing" role="status" aria-live="polite">
           <span>{loading ? "Looking for an unfinished preview…" : "Processing the statement safely…"}</span>
-          {processing && <button type="button" className="button-ghost" onClick={cancel}>Cancel</button>}
+          {processing && <button type="button" className="button-ghost" disabled={externalLocked} onClick={() => { if (!externallyBlocked()) cancel(); }}>Cancel</button>}
         </div>
       )}
 
@@ -362,11 +370,11 @@ export default function ImportPreviewPanel({ importState, onImportConfirmed = as
             id="sunflower-statement-file"
             type="file"
             accept=".pdf,application/pdf"
-            disabled={!sourceType}
+            disabled={externalLocked || !sourceType}
             onChange={(event) => submitFile(event.target.files?.[0])}
           />
           <p><strong>Drop a statement PDF here</strong> or choose it from your device.</p>
-          <button type="button" disabled={!sourceType} onClick={() => fileInput.current?.click()}>Choose PDF</button>
+          <button type="button" disabled={externalLocked || !sourceType} onClick={() => { if (!externallyBlocked()) fileInput.current?.click(); }}>Choose PDF</button>
         </div>
       )}
 

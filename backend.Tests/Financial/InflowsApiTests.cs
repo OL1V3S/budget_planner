@@ -143,6 +143,53 @@ public sealed class InflowsApiTests
     }
 
     [Fact]
+    public async Task Create_and_update_accept_quoted_exact_decimals_and_preserve_date_and_description_semantics()
+    {
+        await using var app = new FinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("inflow-quoted-amount-owner@example.com");
+
+        using var created = await owner.Client.PostAsync(
+            "/api/inflows",
+            new StringContent(
+                """{"description":"  Exact   Deposit  ","amount":"9999999999999999.99","date":"2026-09-03"}""",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+        var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Equal("Exact   Deposit", createdBody.GetProperty("description").GetString());
+        Assert.Equal(JsonValueKind.Number, createdBody.GetProperty("amount").ValueKind);
+        Assert.Equal("9999999999999999.99", createdBody.GetProperty("amount").GetRawText());
+        Assert.Equal(9999999999999999.99m, createdBody.GetProperty("amount").GetDecimal());
+        Assert.Equal("2026-09-03", createdBody.GetProperty("date").GetString());
+        var id = createdBody.GetProperty("id").GetInt32();
+        var persistedCreated = await app.FindInflowAsync(id);
+        Assert.NotNull(persistedCreated);
+        Assert.Equal(9999999999999999.99m, persistedCreated.Amount);
+
+        using var updated = await owner.Client.PutAsync(
+            $"/api/inflows/{id}",
+            new StringContent(
+                $$"""{"id":{{id}},"description":"  Revised  CASH In  ","amount":"1234567890123456.78","date":"2026-08-31"}""",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+
+        Assert.Equal(HttpStatusCode.NoContent, updated.StatusCode);
+        var persistedUpdated = await app.FindInflowAsync(id);
+        Assert.NotNull(persistedUpdated);
+        Assert.Equal("Revised  CASH In", persistedUpdated.Description);
+        Assert.Equal(1234567890123456.78m, persistedUpdated.Amount);
+        Assert.Equal(new DateOnly(2026, 8, 31), persistedUpdated.Date);
+
+        using var read = await owner.Client.GetAsync($"/api/inflows/{id}");
+        var readBody = await read.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        Assert.Equal("Revised  CASH In", readBody.GetProperty("description").GetString());
+        Assert.Equal("1234567890123456.78", readBody.GetProperty("amount").GetRawText());
+        Assert.Equal("2026-08-31", readBody.GetProperty("date").GetString());
+    }
+
+    [Fact]
     public async Task Create_validates_description_after_outer_trim_and_allows_manual_duplicates()
     {
         await using var app = new FinancialApiTestApplication();

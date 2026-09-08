@@ -24,6 +24,18 @@ the permanent, complete archive.
 
 ## History
 
+### 2026-09-08 — Recorded cash-in management
+
+[PR #142](https://github.com/OL1V3S/ordo/pull/142) ·
+[Issue #141](https://github.com/OL1V3S/ordo/issues/141)
+
+- Added a separate Cash in section in Activity with manual entry, search, edit,
+  and delete for all recorded inflows, including imported or paycheck-linked records.
+- Preserved exact amount drafts and posted dates, with explicit edit/delete
+  warnings and recovery for uncertain writes or unavailable refreshed lists.
+- Coordinated cash-in, expense, and import tasks; confirmed imports refresh each
+  affected record list while retaining known success if a read fails.
+
 ### 2026-09-07 — Ordo UX V3
 
 [Issue #127](https://github.com/OL1V3S/ordo/issues/127) ·

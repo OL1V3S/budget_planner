@@ -39,6 +39,14 @@ constants, theme, UI, and utilities live under
 `frontend/src/shared/`; chart-specific presentation lives under
 `frontend/src/charts/`.
 
+The Activity page coordinates spending, cash-in, and import tasks. The
+`inflows` frontend feature owns exact-decimal drafts, cash-in presentation, and
+session-scoped reads/writes over the existing `/api/inflows` contract. Imported
+and paycheck-linked inflows share this management surface; the DTO carries no
+source/linkage flags. Cash-in mutation outcomes distinguish rejected, unknown,
+and completed writes with failed refreshes. Import confirmation refreshes each
+record list according to its saved counts.
+
 Below the desktop sidebar breakpoint, the shell exposes Home, Activity, Plan,
 Insights, and More. The protected `/plan` and `/more` pages group links to the
 existing feature URLs without owning feature data or changing their workflows.

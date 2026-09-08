@@ -95,8 +95,8 @@ boundaries in more detail.
 ## Current shape and maturity
 
 Ordo is an evolving product focused on recorded activity and explicit review.
-It currently models one checking account, with manual expense and cash-in entry and supported
-statement import rather than a live bank connection. Investing is an unavailable
+It currently models one checking account, with manual expense and cash-in entry
+and supported statement import rather than a live bank connection. Investing is an unavailable
 placeholder, not a portfolio or investment-analysis feature.
 
 The app has a React/Vite browser frontend hosted on Vercel, an ASP.NET Core

@@ -19,8 +19,8 @@ the permanent, complete archive.
 - Skip trivial typo-only or formatting-only changes and mechanical maintenance
   with no meaningful product or engineering effect.
 - Do not backfill older history. The completed **Ordo UX V3 work governed by
-  [#127](https://github.com/OL1V3S/ordo/issues/127)** will create the first real
-  entry after that work merges.
+  [#127](https://github.com/OL1V3S/ordo/issues/127)** is the starting point for
+  this history.
 
 ## History
 
@@ -32,7 +32,8 @@ the permanent, complete archive.
 [PR #134](https://github.com/OL1V3S/ordo/pull/134),
 [PR #135](https://github.com/OL1V3S/ordo/pull/135),
 [PR #136](https://github.com/OL1V3S/ordo/pull/136),
-[PR #137](https://github.com/OL1V3S/ordo/pull/137)
+[PR #137](https://github.com/OL1V3S/ordo/pull/137),
+[PR #138](https://github.com/OL1V3S/ordo/pull/138)
 
 - Simplified Home, Activity/import, Budgets, Commitments, Paychecks, and Insights
   around recorded figures, saved expectations, and explicit review tasks.

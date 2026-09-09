@@ -2,7 +2,8 @@ namespace BudgetPlanner.Models;
 
 public enum PaycheckOccurrenceKind
 {
-    ConfirmationEvidence
+    ConfirmationEvidence,
+    RecordedReceipt
 }
 
 public class PaycheckOccurrence

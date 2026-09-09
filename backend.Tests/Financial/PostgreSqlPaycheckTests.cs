@@ -73,6 +73,40 @@ public sealed class PostgreSqlPaycheckTests
     }
 
     [PostgreSqlFact]
+    public async Task Recorded_receipt_schema_migration_preserves_existing_confirmation_occurrences()
+    {
+        await using var app = new PostgreSqlFinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("paycheck-receipt-migration@example.com");
+        var inflow = await app.SeedInflowAsync(owner.Id, date: new DateOnly(2026, 9, 10));
+        using var scope = app.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<BudgetContext>();
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync("20260904213643_AddPaycheckProfiles");
+
+        var profile = NewProfile(owner.Id);
+        profile.Occurrences.Add(new PaycheckOccurrence
+        {
+            AccountInflowId = inflow.Id,
+            OwnerId = owner.Id,
+            Kind = PaycheckOccurrenceKind.ConfirmationEvidence,
+            EvidenceRevisionAtAssignment = inflow.PaycheckEvidenceRevision,
+            SlotAnchor = inflow.Date,
+            TimingOffsetDays = 0,
+            LinkedAt = DateTime.UtcNow
+        });
+        context.PaycheckProfiles.Add(profile);
+        await context.SaveChangesAsync();
+
+        await context.Database.MigrateAsync();
+
+        Assert.Equal(app.GetDefinedMigrations(), await app.GetAppliedMigrationsAsync());
+        var occurrence = await context.PaycheckOccurrences.AsNoTracking().SingleAsync();
+        Assert.Equal(PaycheckOccurrenceKind.ConfirmationEvidence, occurrence.Kind);
+        Assert.Equal(inflow.Id, occurrence.AccountInflowId);
+        Assert.Equal(inflow.Date, occurrence.SlotAnchor);
+    }
+
+    [PostgreSqlFact]
     public async Task Profile_checks_reject_invalid_and_partial_nullable_shapes()
     {
         await using var app = new PostgreSqlFinancialApiTestApplication();
@@ -296,6 +330,44 @@ public sealed class PostgreSqlPaycheckTests
         Assert.Empty(await context.PaycheckOccurrences.ToListAsync());
         Assert.False(await context.PaycheckProfiles.AnyAsync(value => value.OwnerId == owner.Id));
         Assert.True(await context.PaycheckProfiles.AnyAsync(value => value.Id == foreignProfile.Id));
+    }
+
+    [PostgreSqlFact]
+    public async Task Recorded_receipts_allow_exact_out_of_window_offsets_and_enforce_one_receipt_per_profile_slot()
+    {
+        await using var app = new PostgreSqlFinancialApiTestApplication();
+        using var owner = await app.CreateAuthenticatedUserAsync("paycheck-receipt-constraints@example.com");
+        var firstInflow = await app.SeedInflowAsync(owner.Id, date: new DateOnly(2026, 9, 6));
+        var secondInflow = await app.SeedInflowAsync(owner.Id, date: new DateOnly(2026, 9, 14));
+        var thirdInflow = await app.SeedInflowAsync(owner.Id, date: new DateOnly(2026, 10, 6));
+        using var scope = app.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<BudgetContext>();
+        var profile = NewProfile(owner.Id);
+        var secondProfile = NewProfile(owner.Id);
+        context.PaycheckProfiles.AddRange(profile, secondProfile);
+        await context.SaveChangesAsync();
+
+        Task Insert(Guid profileId, AccountInflow inflow, DateOnly slotAnchor, short offset) =>
+            context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "PaycheckOccurrences"
+                    ("PaycheckProfileId", "AccountInflowId", "OwnerId", "Kind", "EvidenceRevisionAtAssignment", "SlotAnchor", "TimingOffsetDays", "LinkedAt")
+                VALUES ({profileId}, {inflow.Id}, {owner.Id}, 'RecordedReceipt', {inflow.PaycheckEvidenceRevision}, {slotAnchor}, {offset}, {DateTime.UtcNow})
+                """);
+
+        var slotAnchor = new DateOnly(2026, 9, 10);
+        await Insert(profile.Id, firstInflow, slotAnchor, -4);
+        await Insert(secondProfile.Id, secondInflow, slotAnchor, 4);
+
+        var duplicateSlot = await Assert.ThrowsAsync<PostgresException>(() =>
+            Insert(profile.Id, thirdInflow, slotAnchor, 26));
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, duplicateSlot.SqlState);
+        Assert.Equal("UX_PaycheckOccurrences_Profile_Slot", duplicateSlot.ConstraintName);
+
+        var receipts = await context.PaycheckOccurrences.AsNoTracking()
+            .OrderBy(value => value.TimingOffsetDays).ToListAsync();
+        Assert.Equal(2, receipts.Count);
+        Assert.All(receipts, value => Assert.Equal(PaycheckOccurrenceKind.RecordedReceipt, value.Kind));
+        Assert.Equal(new short[] { -4, 4 }, receipts.Select(value => value.TimingOffsetDays));
     }
 
     [PostgreSqlFact]

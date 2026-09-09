@@ -384,12 +384,14 @@ public class BudgetContext : IdentityDbContext<ApplicationUser>, IDataProtection
             occurrence.ToTable(table =>
             {
                 table.HasCheckConstraint(
-                    "CK_PaycheckOccurrence_Kind", "\"Kind\" = 'ConfirmationEvidence'");
+                    "CK_PaycheckOccurrence_Kind",
+                    "\"Kind\" IN ('ConfirmationEvidence', 'RecordedReceipt')");
                 table.HasCheckConstraint(
                     "CK_PaycheckOccurrence_EvidenceRevision",
                     "\"EvidenceRevisionAtAssignment\" <> '00000000-0000-0000-0000-000000000000'::uuid");
                 table.HasCheckConstraint(
-                    "CK_PaycheckOccurrence_TimingOffset", "\"TimingOffsetDays\" BETWEEN -3 AND 3");
+                    "CK_PaycheckOccurrence_TimingOffset",
+                    "\"Kind\" = 'RecordedReceipt' OR \"TimingOffsetDays\" BETWEEN -3 AND 3");
             });
             occurrence.HasKey(value => new { value.PaycheckProfileId, value.AccountInflowId });
             occurrence.Property(value => value.Kind).HasConversion<string>().HasMaxLength(30);
@@ -405,6 +407,8 @@ public class BudgetContext : IdentityDbContext<ApplicationUser>, IDataProtection
                 .HasConstraintName("FK_PaycheckOccurrence_AccountInflow_Owner")
                 .OnDelete(DeleteBehavior.Cascade);
             occurrence.HasIndex(value => value.AccountInflowId).IsUnique();
+            occurrence.HasIndex(value => new { value.PaycheckProfileId, value.SlotAnchor })
+                .IsUnique().HasDatabaseName("UX_PaycheckOccurrences_Profile_Slot");
         });
 
         modelBuilder.Entity<PaycheckCandidateDismissal>(dismissal =>
